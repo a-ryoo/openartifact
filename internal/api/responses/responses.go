@@ -450,6 +450,7 @@ type VulnScanResultResponse struct {
 	PackageName     string  `json:"package_name"`
 	PackageVersion  string  `json:"package_version"`
 	Ecosystem       string  `json:"ecosystem"`
+	Platform        string  `json:"platform,omitempty"`
 	Scanner         string  `json:"scanner"`
 	ScanStatus      string  `json:"scan_status"`
 	Vulnerabilities any     `json:"vulnerabilities"`

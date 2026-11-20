@@ -41,6 +41,12 @@ WITH q_candidates AS MATERIALIZED (
 SELECT p.kind, p.id, p.repository_id, p.repository_name, p.repository_format, p.artifact_id,
        p.package_name, p.package_version, p.scanner, p.scan_status, p.critical, p.high, p.medium, p.low,
        p.quarantined, p.status, p.vex_rank, p.severity_rank, p.kev_count, p.max_epss, p.sort_rank, p.scanned_at,
+       CASE WHEN p.docker_digest THEN ARRAY(
+           SELECT (CASE WHEN t.image = '' THEN p.repository_name ELSE p.repository_name || '/' || t.image END) || ':' || t.tag
+           FROM docker_manifest_tags(p.repository_id, p.artifact_id) t
+           ORDER BY t.image, t.tag
+           LIMIT 10
+       ) ELSE ARRAY[]::text[] END::text[] AS image_tags,
        COALESCE((CASE p.kind
             WHEN 'vuln' THEN (SELECT v ->> 'id'
                               FROM vuln_results vr, jsonb_array_elements(vr.vulnerabilities) AS v
@@ -61,10 +67,12 @@ SELECT p.kind, p.id, p.repository_id, p.repository_name, p.repository_format, p.
 FROM (
     SELECT sr.kind, sr.id, sr.repository_id, r.name AS repository_name, r.format AS repository_format, sr.artifact_id,
            sr.package_name, sr.package_version, sr.scanner, sr.scan_status, sr.critical, sr.high, sr.medium, sr.low,
-           sr.quarantined, sr.status, COALESCE(sr.vex_rank, 0)::int AS vex_rank, sr.severity_rank, sr.kev_count, sr.max_epss, k.sort_rank, sr.scanned_at
+           sr.quarantined, sr.status, COALESCE(sr.vex_rank, 0)::int AS vex_rank, sr.severity_rank, sr.kev_count, sr.max_epss, k.sort_rank, sr.scanned_at,
+           a.docker_digest
     FROM security_results sr
     JOIN repositories r ON r.id = sr.repository_id
     JOIN projects pr ON pr.id = r.project_id
+    CROSS JOIN LATERAL (SELECT (r.format = 'docker' AND r.repo_type = 'hosted' AND sr.kind = 'vuln' AND sr.artifact_id LIKE 'sha256:%') AS docker_digest) a
     CROSS JOIN LATERAL (
         SELECT CASE WHEN sr.kev_count > 0 THEN 6
                     WHEN sr.max_epss >= @epss_threshold::float8 THEN 5
@@ -74,6 +82,8 @@ FROM (
         SELECT CASE WHEN @sort_priority::boolean THEN pk.priority_rank ELSE sr.severity_rank END::int AS sort_rank
     ) k
     WHERE sr.is_finding
+      AND (NOT @current_images::boolean OR NOT a.docker_digest
+           OR EXISTS (SELECT 1 FROM docker_manifest_tags(sr.repository_id, sr.artifact_id)))
       AND sr.kind = ANY(@kinds::text[])
       AND (@scope_all::boolean OR r.project_id = ANY(@scope_projects::uuid[]))
       AND (sqlc.narg('repo')::text IS NULL OR r.name = sqlc.narg('repo')::text)
@@ -86,7 +96,12 @@ FROM (
       AND (sqlc.narg('q')::text IS NULL
            OR (sr.package_name || '@' || sr.package_version) ILIKE sqlc.narg('q')::text
            OR r.name ILIKE sqlc.narg('q')::text
-           OR EXISTS (SELECT 1 FROM q_match m WHERE m.repository_id = sr.repository_id AND m.id::text = sr.artifact_id))
+           OR EXISTS (SELECT 1 FROM q_match m WHERE m.repository_id = sr.repository_id AND m.id::text = sr.artifact_id)
+           OR (a.docker_digest AND EXISTS (
+               SELECT 1 FROM docker_manifest_tags(sr.repository_id, sr.artifact_id) t
+               WHERE ((CASE WHEN t.image = '' THEN r.name ELSE r.name || '/' || t.image END) || ':' || t.tag)
+                     ILIKE sqlc.narg('q')::text
+           )))
       AND (NOT @has_cursor::boolean
            OR k.sort_rank < @after_rank::int
            OR (k.sort_rank = @after_rank::int
@@ -113,6 +128,8 @@ WHERE sr.is_finding
   AND (@scope_all::boolean OR r.project_id = ANY(@scope_projects::uuid[]))
   AND (sqlc.narg('repo')::text IS NULL OR r.name = sqlc.narg('repo')::text)
   AND (sqlc.narg('project')::text IS NULL OR pr.name = sqlc.narg('project')::text)
+  AND (NOT @current_images::boolean OR NOT (r.format = 'docker' AND r.repo_type = 'hosted' AND sr.kind = 'vuln' AND sr.artifact_id LIKE 'sha256:%')
+       OR EXISTS (SELECT 1 FROM docker_manifest_tags(sr.repository_id, sr.artifact_id)))
 GROUP BY sr.kind;
 
 -- name: SecurityScanCoverage :one

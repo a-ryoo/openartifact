@@ -172,8 +172,8 @@
   "security.table.removedPackage": "削除されたパッケージ",
   "security.empty.title": "検出結果はありません",
   "security.empty.hint": "パッケージをスキャンすると、結果がここに表示されます。",
-  "security.clear.title": "問題なし",
-  "security.clear.hint": "この範囲でスキャン済みのパッケージはすべて問題ありません。新しいスキャンのたびにこの表示が更新されます。",
+  "security.clear.title": "この範囲に検出結果はありません",
+  "security.clear.hint": "スキャンで検出された結果がここに表示されます。",
   "security.never.title": "まだスキャンされていません",
   "security.never.hint": "パッケージをスキャンすると、検出結果がここに表示されます。アップロード時の自動スキャンは、設定のスキャナーで構成します。",
   "security.never.command": "curl -X POST -H \"Authorization: Bearer $TOKEN\" -d '{\"artifact_id\":\"<id>\"}' $SERVER/api/v1/repositories/<repo>/license/scan",
@@ -289,5 +289,7 @@
   "security.filter.epss": "EPSS スコア",
   "security.filter.anyEpss": "EPSS 指定なし",
   "security.filter.epssAtLeast": "EPSS {value} 以上",
-  "security.filter.kev": "KEV のみ"
+  "security.filter.kev": "KEV のみ",
+  "security.filter.untagged": "現在のイメージタグがないスキャンを含める",
+  "security.vuln.platform": "プラットフォーム"
 }

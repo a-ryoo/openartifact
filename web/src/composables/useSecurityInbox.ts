@@ -29,7 +29,7 @@ export const INBOX_PAGE_LIMIT = 25
 
 /**
  * The security inbox: URL-bound filters and the cursor-paged findings list, the
- * summary strip (which follows the repository filter only and sets filters when
+ * summary strip (which follows the repository and image filters and sets filters when
  * clicked), the scanner health (administrators), and the all-clear / forbidden
  * decisions that tell an empty scope from an empty filter result.
  */
@@ -57,7 +57,7 @@ export function useSecurityInbox() {
 
   const filters = computed(() => list.filters.value as InboxFilters)
 
-  // ─── Summary: follows the repository filter only ──────────────────────────
+  // ─── Summary: follows the repository and image filters ──────────────────────────
 
   const summary = ref<SecuritySummary | null>(null)
   const summaryError = ref('')
@@ -66,7 +66,7 @@ export function useSecurityInbox() {
   async function loadSummary(): Promise<void> {
     const seq = ++summarySeq
     try {
-      const result = await getFindingsSummary(filters.value.repo || undefined)
+      const result = await getFindingsSummary(filters.value.repo || undefined, filters.value.untagged ? undefined : true)
       if (seq !== summarySeq) return
       summary.value = result
       summaryError.value = ''
@@ -77,7 +77,7 @@ export function useSecurityInbox() {
     }
   }
 
-  watch(() => filters.value.repo, () => void loadSummary(), { immediate: true })
+  watch([() => filters.value.repo, () => filters.value.untagged], () => void loadSummary(), { immediate: true })
 
   // ─── Health (administrators): scanner readiness, backlog, AI switch ───────
 

@@ -165,6 +165,14 @@ func securityFilter(r *http.Request, scope models.FindingScope) (models.FindingF
 		return f, "project is too long"
 	}
 
+	switch q.Get("current_images") {
+	case "", "false":
+	case "true":
+		f.CurrentImages = true
+	default:
+		return f, "current_images must be true or false"
+	}
+
 	return f, ""
 }
 
@@ -395,6 +403,7 @@ func (h *SecurityHandler) findingToResponse(f *models.Finding) responses.Securit
 		PackageName:    f.PackageName,
 		PackageVersion: f.PackageVersion,
 		ArtifactID:     f.ArtifactID,
+		ImageTags:      f.ImageTags,
 		Severity:       f.Severity(),
 		Counts:         responses.SecurityFindingCounts{Critical: f.Critical, High: f.High, Medium: f.Medium, Low: f.Low},
 		Title:          f.Title,

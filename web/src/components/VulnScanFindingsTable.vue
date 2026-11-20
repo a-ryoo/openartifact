@@ -14,15 +14,16 @@ SPDX-License-Identifier: AGPL-3.0-or-later
           <th scope="col" class="text-left py-2 pr-3 text-muted font-medium">{{ t('security.vuln.finding.severity') }}</th>
           <th scope="col" data-drop-order="3" class="text-left py-2 pr-3 text-muted font-medium">{{ t('security.vuln.finding.exploit') }}</th>
           <th scope="col" data-drop-order="2" class="text-left py-2 pr-3 text-muted font-medium">{{ t('security.vuln.finding.cvss') }}</th>
-          <th scope="col" data-drop-order="1" class="text-left py-2 pr-3 text-muted font-medium">{{ t('security.vuln.finding.fixedIn') }}</th>
+          <th v-if="showPackage" scope="col" class="text-left py-2 pr-3 text-muted font-medium">{{ t('security.common.package') }}</th>
+          <th scope="col" data-drop-order="4" class="text-left py-2 pr-3 text-muted font-medium">{{ t('security.vuln.finding.fixedIn') }}</th>
           <th scope="col" class="text-left py-2 pr-3 text-muted font-medium">{{ t('security.vuln.finding.summary') }}</th>
           <th scope="col" class="text-left py-2 pr-3 text-muted font-medium">{{ t('security.vex.eyebrow') }}</th>
           <th v-if="canDecide" scope="col" class="py-2 pl-3" :class="ACTIONS_HEAD"><span class="sr-only">{{ t('common.actions') }}</span></th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="f in findings" :key="f.id" class="group/row border-b border-border last:border-0 align-top" data-testid="finding-row">
-          <td class="py-2 pr-3 font-mono text-xs">
+        <tr v-for="f in findings" :key="JSON.stringify([f.id, f.package])" class="group/row border-b border-border last:border-0 align-top" data-testid="finding-row">
+          <td class="py-2 pr-3 font-mono text-xs whitespace-nowrap">
             {{ f.id }}
             <div v-if="f.cve && f.cve !== f.id" class="text-muted" data-testid="finding-cve">{{ f.cve }}</div>
           </td>
@@ -35,6 +36,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             </div>
           </td>
           <td class="py-2 pr-3 text-xs font-mono">{{ f.cvss > 0 ? f.cvss : '—' }}</td>
+          <td v-if="showPackage" class="py-2 pr-3 text-xs font-mono break-words">{{ f.package || '—' }}</td>
           <td class="py-2 pr-3 text-xs font-mono">{{ f.fixed_in || '—' }}</td>
           <td class="truncate py-2 pr-3 text-xs text-muted" :class="GROW_CELL" :title="f.summary">{{ f.summary }}</td>
           <td class="py-2 pr-3">
@@ -83,4 +85,5 @@ function decisionActions(vulnId: string): RowAction[] {
 
 /** Most urgent first: KEV, high EPSS, then severity and CVSS. */
 const findings = computed(() => sortVulns(vulnFindings(props.scan)))
+const showPackage = computed(() => findings.value.some((f) => f.package))
 </script>

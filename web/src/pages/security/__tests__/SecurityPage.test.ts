@@ -72,7 +72,7 @@ describe('SecurityPage', () => {
     const { w } = await mountPage()
     expect(w.text()).toContain('CVE-2026-0001')
     expect(w.text()).toContain('left-pad@1.0.0')
-    expect(calls(spy, '/api/v1/security/findings').at(-1)!.search).toBe('?limit=25')
+    expect(calls(spy, '/api/v1/security/findings').at(-1)!.search).toBe('?current_images=true&limit=25')
     w.unmount()
   })
 
@@ -80,8 +80,22 @@ describe('SecurityPage', () => {
     const spy = mockApi()
     const { w } = await mountPage('/security?type=secret&severity=high&status=open&repo=libs')
     const q = calls(spy, '/api/v1/security/findings').at(-1)!.searchParams
-    expect(Object.fromEntries(q)).toEqual({ type: 'secret', severity: 'high', status: 'open', repo: 'libs', limit: '25' })
-    expect(Object.fromEntries(calls(spy, '/api/v1/security/findings/summary').at(-1)!.searchParams)).toEqual({ repo: 'libs' })
+    expect(Object.fromEntries(q)).toEqual({ current_images: 'true', type: 'secret', severity: 'high', status: 'open', repo: 'libs', limit: '25' })
+    expect(Object.fromEntries(calls(spy, '/api/v1/security/findings/summary').at(-1)!.searchParams)).toEqual({ current_images: 'true', repo: 'libs' })
+    w.unmount()
+  })
+
+  it('links the actual image tag and includes untagged scans on request', async () => {
+    const image = { ...FINDING, format: 'docker', image_tags: ['libs/tools/app:stable'], package_name: 'sha256:123', package_version: '' }
+    const spy = mockApi({ findings: { findings: [image], has_more: false } })
+    const { w, router } = await mountPage('/security?repo=libs')
+    expect(w.get('a[href="/repos/libs/packages/libs/tools/app/versions/stable?tab=security"]').text()).toBe('libs/tools/app:stable')
+    expect(calls(spy, '/api/v1/security/findings/summary').at(-1)!.searchParams.get('current_images')).toBe('true')
+    await w.get('[data-testid="filter-untagged"]').setValue(true)
+    await flushPromises()
+    expect(router.currentRoute.value.query.untagged).toBe('1')
+    expect(calls(spy, '/api/v1/security/findings').at(-1)!.searchParams.has('current_images')).toBe(false)
+    expect(calls(spy, '/api/v1/security/findings/summary').at(-1)!.searchParams.has('current_images')).toBe(false)
     w.unmount()
   })
 
@@ -274,13 +288,13 @@ describe('SecurityPage', () => {
     it('restores sort and filters from the URL and clears the filters but keeps the order', async () => {
       const spy = mockApi()
       const { w, router } = await mountPage('/security?sort=priority&kev=1&epss_min=0.5&priority=kev')
-      expect(lastQuery(spy)).toEqual({ sort: 'priority', kev: 'true', epss_min: '0.5', priority: 'kev', limit: '25' })
+      expect(lastQuery(spy)).toEqual({ current_images: 'true', sort: 'priority', kev: 'true', epss_min: '0.5', priority: 'kev', limit: '25' })
       expect((w.get('[data-testid="filter-kev"]').element as HTMLInputElement).checked).toBe(true)
       expect((w.get('[data-testid="filter-epss"]').element as HTMLSelectElement).value).toBe('0.5')
       await w.get('[role="search"] button').trigger('click')
       await flushPromises()
       expect(router.currentRoute.value.query).toEqual({ sort: 'priority' })
-      expect(lastQuery(spy)).toEqual({ sort: 'priority', limit: '25' })
+      expect(lastQuery(spy)).toEqual({ current_images: 'true', sort: 'priority', limit: '25' })
       w.unmount()
     })
 
@@ -290,7 +304,7 @@ describe('SecurityPage', () => {
       await w.get('[data-testid="export-csv"]').trigger('click')
       await flushPromises()
       expect(Object.fromEntries(calls(spy, '/api/v1/security/findings/export').at(-1)!.searchParams)).toEqual({
-        type: 'vuln', sort: 'priority', kev: 'true', format: 'csv',
+        current_images: 'true', type: 'vuln', sort: 'priority', kev: 'true', format: 'csv',
       })
       w.unmount()
     })

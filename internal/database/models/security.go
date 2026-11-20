@@ -51,6 +51,8 @@ type FindingFilter struct {
 	Scope   FindingScope
 	Repo    string
 	Project string
+	// CurrentImages omits digest-based Docker findings whose manifests have no live tag.
+	CurrentImages bool
 }
 
 // FindingListParams selects one keyset page of findings. Empty filters match
@@ -106,6 +108,7 @@ type Finding struct {
 	Repository     string
 	Format         string
 	ArtifactID     string
+	ImageTags      []string
 	PackageName    string
 	PackageVersion string
 	Scanner        string

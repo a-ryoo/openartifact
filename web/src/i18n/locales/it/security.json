@@ -172,8 +172,8 @@
   "security.table.removedPackage": "Pacchetto rimosso",
   "security.empty.title": "Nessun rilevamento",
   "security.empty.hint": "I risultati delle scansioni compaiono qui non appena un pacchetto viene analizzato.",
-  "security.clear.title": "Tutto in regola",
-  "security.clear.hint": "Ogni pacchetto analizzato in questo ambito è pulito. Le nuove scansioni mantengono aggiornata questa vista.",
+  "security.clear.title": "Nessun risultato in questo ambito",
+  "security.clear.hint": "I risultati vengono mostrati qui quando una scansione li segnala.",
   "security.never.title": "Ancora nessuna scansione",
   "security.never.hint": "Analizza un pacchetto per vederne i rilevamenti qui. La scansione automatica al caricamento si configura in Impostazioni, Scanner.",
   "security.never.command": "curl -X POST -H \"Authorization: Bearer $TOKEN\" -d '{\"artifact_id\":\"<id>\"}' $SERVER/api/v1/repositories/<repo>/license/scan",
@@ -292,5 +292,7 @@
   "security.filter.epss": "Punteggio EPSS",
   "security.filter.anyEpss": "Qualsiasi EPSS",
   "security.filter.epssAtLeast": "EPSS almeno {value}",
-  "security.filter.kev": "Solo KEV"
+  "security.filter.kev": "Solo KEV",
+  "security.filter.untagged": "Includi le scansioni senza tag immagine correnti",
+  "security.vuln.platform": "Piattaforma"
 }

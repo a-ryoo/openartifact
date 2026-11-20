@@ -4999,6 +4999,13 @@
             "type": "string",
             "description": "Format of the repository (maven, npm, pypi, ...)."
           },
+          "image_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Up to ten current image:tag references to the scanned Docker manifest."
+          },
           "package_name": {
             "type": "string"
           },
@@ -5984,6 +5991,10 @@
           },
           "ecosystem": {
             "type": "string"
+          },
+          "platform": {
+            "type": "string",
+            "description": "Platform of the scanned Docker image, when available from the image configuration."
           },
           "scanner": {
             "type": "string",
@@ -13019,6 +13030,15 @@
         ],
         "parameters": [
           {
+            "name": "current_images",
+            "in": "query",
+            "description": "Only include digest-based hosted Docker findings for manifests reachable from a current tag.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "type",
             "in": "query",
             "description": "Comma-separated finding types to include: `vuln`, `license`, `secret`, `ai`. Default: all four.",
@@ -13192,6 +13212,15 @@
         ],
         "parameters": [
           {
+            "name": "current_images",
+            "in": "query",
+            "description": "Only include digest-based hosted Docker findings for manifests reachable from a current tag.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "repo",
             "in": "query",
             "description": "Only the findings of this repository (by name).",
@@ -13236,6 +13265,15 @@
           "Scanning"
         ],
         "parameters": [
+          {
+            "name": "current_images",
+            "in": "query",
+            "description": "Only include digest-based hosted Docker findings for manifests reachable from a current tag.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
           {
             "name": "type",
             "in": "query",

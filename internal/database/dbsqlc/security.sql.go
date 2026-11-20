@@ -35,7 +35,7 @@ const listSecurityFindings = `-- name: ListSecurityFindings :many
 WITH q_candidates AS MATERIALIZED (
     SELECT array_agg(DISTINCT sr.artifact_id::uuid) AS ids
     FROM security_results sr
-    WHERE $13::text IS NOT NULL
+    WHERE $14::text IS NOT NULL
       AND sr.is_finding
       AND sr.package_name = sr.artifact_id
       AND sr.artifact_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -54,11 +54,17 @@ WITH q_candidates AS MATERIALIZED (
         SELECT t.repository_id, t.id, (CASE WHEN t.image = '' THEN r.name ELSE r.name || '/' || t.image END)::text, t.name::text
         FROM docker_tags t JOIN repositories r ON r.id = t.repository_id WHERE t.id IN (SELECT unnest(ids) FROM q_candidates)
     ) AS p
-    WHERE (p.name || '@' || p.version) ILIKE $13::text
+    WHERE (p.name || '@' || p.version) ILIKE $14::text
 )
 SELECT p.kind, p.id, p.repository_id, p.repository_name, p.repository_format, p.artifact_id,
        p.package_name, p.package_version, p.scanner, p.scan_status, p.critical, p.high, p.medium, p.low,
        p.quarantined, p.status, p.vex_rank, p.severity_rank, p.kev_count, p.max_epss, p.sort_rank, p.scanned_at,
+       CASE WHEN p.docker_digest THEN ARRAY(
+           SELECT (CASE WHEN t.image = '' THEN p.repository_name ELSE p.repository_name || '/' || t.image END) || ':' || t.tag
+           FROM docker_manifest_tags(p.repository_id, p.artifact_id) t
+           ORDER BY t.image, t.tag
+           LIMIT 10
+       ) ELSE ARRAY[]::text[] END::text[] AS image_tags,
        COALESCE((CASE p.kind
             WHEN 'vuln' THEN (SELECT v ->> 'id'
                               FROM vuln_results vr, jsonb_array_elements(vr.vulnerabilities) AS v
@@ -79,10 +85,12 @@ SELECT p.kind, p.id, p.repository_id, p.repository_name, p.repository_format, p.
 FROM (
     SELECT sr.kind, sr.id, sr.repository_id, r.name AS repository_name, r.format AS repository_format, sr.artifact_id,
            sr.package_name, sr.package_version, sr.scanner, sr.scan_status, sr.critical, sr.high, sr.medium, sr.low,
-           sr.quarantined, sr.status, COALESCE(sr.vex_rank, 0)::int AS vex_rank, sr.severity_rank, sr.kev_count, sr.max_epss, k.sort_rank, sr.scanned_at
+           sr.quarantined, sr.status, COALESCE(sr.vex_rank, 0)::int AS vex_rank, sr.severity_rank, sr.kev_count, sr.max_epss, k.sort_rank, sr.scanned_at,
+           a.docker_digest
     FROM security_results sr
     JOIN repositories r ON r.id = sr.repository_id
     JOIN projects pr ON pr.id = r.project_id
+    CROSS JOIN LATERAL (SELECT (r.format = 'docker' AND r.repo_type = 'hosted' AND sr.kind = 'vuln' AND sr.artifact_id LIKE 'sha256:%') AS docker_digest) a
     CROSS JOIN LATERAL (
         SELECT CASE WHEN sr.kev_count > 0 THEN 6
                     WHEN sr.max_epss >= $1::float8 THEN 5
@@ -92,26 +100,33 @@ FROM (
         SELECT CASE WHEN $2::boolean THEN pk.priority_rank ELSE sr.severity_rank END::int AS sort_rank
     ) k
     WHERE sr.is_finding
-      AND sr.kind = ANY($3::text[])
-      AND ($4::boolean OR r.project_id = ANY($5::uuid[]))
-      AND ($6::text IS NULL OR r.name = $6::text)
-      AND ($7::text IS NULL OR pr.name = $7::text)
-      AND ($8::int IS NULL OR sr.severity_rank = $8::int)
-      AND ($9::text IS NULL OR sr.status = $9::text)
-      AND ($10::boolean IS NULL OR (sr.kev_count > 0) = $10::boolean)
-      AND ($11::float8 IS NULL OR sr.max_epss >= $11::float8)
-      AND ($12::int IS NULL OR pk.priority_rank = $12::int)
-      AND ($13::text IS NULL
-           OR (sr.package_name || '@' || sr.package_version) ILIKE $13::text
-           OR r.name ILIKE $13::text
-           OR EXISTS (SELECT 1 FROM q_match m WHERE m.repository_id = sr.repository_id AND m.id::text = sr.artifact_id))
-      AND (NOT $14::boolean
-           OR k.sort_rank < $15::int
-           OR (k.sort_rank = $15::int
-               AND (sr.scanned_at < $16::timestamptz
-                    OR (sr.scanned_at = $16::timestamptz AND sr.id > $17::uuid))))
+      AND (NOT $3::boolean OR NOT a.docker_digest
+           OR EXISTS (SELECT 1 FROM docker_manifest_tags(sr.repository_id, sr.artifact_id)))
+      AND sr.kind = ANY($4::text[])
+      AND ($5::boolean OR r.project_id = ANY($6::uuid[]))
+      AND ($7::text IS NULL OR r.name = $7::text)
+      AND ($8::text IS NULL OR pr.name = $8::text)
+      AND ($9::int IS NULL OR sr.severity_rank = $9::int)
+      AND ($10::text IS NULL OR sr.status = $10::text)
+      AND ($11::boolean IS NULL OR (sr.kev_count > 0) = $11::boolean)
+      AND ($12::float8 IS NULL OR sr.max_epss >= $12::float8)
+      AND ($13::int IS NULL OR pk.priority_rank = $13::int)
+      AND ($14::text IS NULL
+           OR (sr.package_name || '@' || sr.package_version) ILIKE $14::text
+           OR r.name ILIKE $14::text
+           OR EXISTS (SELECT 1 FROM q_match m WHERE m.repository_id = sr.repository_id AND m.id::text = sr.artifact_id)
+           OR (a.docker_digest AND EXISTS (
+               SELECT 1 FROM docker_manifest_tags(sr.repository_id, sr.artifact_id) t
+               WHERE ((CASE WHEN t.image = '' THEN r.name ELSE r.name || '/' || t.image END) || ':' || t.tag)
+                     ILIKE $14::text
+           )))
+      AND (NOT $15::boolean
+           OR k.sort_rank < $16::int
+           OR (k.sort_rank = $16::int
+               AND (sr.scanned_at < $17::timestamptz
+                    OR (sr.scanned_at = $17::timestamptz AND sr.id > $18::uuid))))
     ORDER BY k.sort_rank DESC, sr.scanned_at DESC, sr.id
-    LIMIT $18::int
+    LIMIT $19::int
 ) p
 ORDER BY p.sort_rank DESC, p.scanned_at DESC, p.id
 `
@@ -119,6 +134,7 @@ ORDER BY p.sort_rank DESC, p.scanned_at DESC, p.id
 type ListSecurityFindingsParams struct {
 	EpssThreshold float64   `db:"epss_threshold" json:"epss_threshold"`
 	SortPriority  bool      `db:"sort_priority" json:"sort_priority"`
+	CurrentImages bool      `db:"current_images" json:"current_images"`
 	Kinds         []string  `db:"kinds" json:"kinds"`
 	ScopeAll      bool      `db:"scope_all" json:"scope_all"`
 	ScopeProjects []string  `db:"scope_projects" json:"scope_projects"`
@@ -160,6 +176,7 @@ type ListSecurityFindingsRow struct {
 	MaxEpss          *float64  `db:"max_epss" json:"max_epss"`
 	SortRank         int32     `db:"sort_rank" json:"sort_rank"`
 	ScannedAt        time.Time `db:"scanned_at" json:"scanned_at"`
+	ImageTags        []string  `db:"image_tags" json:"image_tags"`
 	Title            string    `db:"title" json:"title"`
 }
 
@@ -181,6 +198,7 @@ func (q *Queries) ListSecurityFindings(ctx context.Context, arg ListSecurityFind
 	rows, err := q.db.Query(ctx, listSecurityFindings,
 		arg.EpssThreshold,
 		arg.SortPriority,
+		arg.CurrentImages,
 		arg.Kinds,
 		arg.ScopeAll,
 		arg.ScopeProjects,
@@ -228,6 +246,7 @@ func (q *Queries) ListSecurityFindings(ctx context.Context, arg ListSecurityFind
 			&i.MaxEpss,
 			&i.SortRank,
 			&i.ScannedAt,
+			&i.ImageTags,
 			&i.Title,
 		); err != nil {
 			return nil, err
@@ -311,6 +330,8 @@ WHERE sr.is_finding
   AND ($1::boolean OR r.project_id = ANY($2::uuid[]))
   AND ($3::text IS NULL OR r.name = $3::text)
   AND ($4::text IS NULL OR pr.name = $4::text)
+  AND (NOT $5::boolean OR NOT (r.format = 'docker' AND r.repo_type = 'hosted' AND sr.kind = 'vuln' AND sr.artifact_id LIKE 'sha256:%')
+       OR EXISTS (SELECT 1 FROM docker_manifest_tags(sr.repository_id, sr.artifact_id)))
 GROUP BY sr.kind
 `
 
@@ -319,6 +340,7 @@ type SecurityFindingsSummaryParams struct {
 	ScopeProjects []string `db:"scope_projects" json:"scope_projects"`
 	Repo          *string  `db:"repo" json:"repo"`
 	Project       *string  `db:"project" json:"project"`
+	CurrentImages bool     `db:"current_images" json:"current_images"`
 }
 
 type SecurityFindingsSummaryRow struct {
@@ -338,6 +360,7 @@ func (q *Queries) SecurityFindingsSummary(ctx context.Context, arg SecurityFindi
 		arg.ScopeProjects,
 		arg.Repo,
 		arg.Project,
+		arg.CurrentImages,
 	)
 	if err != nil {
 		return nil, err

@@ -40,6 +40,9 @@ func (a *app) imageSBOMHook() formatdocker.ManifestPutHook {
 // attestations of an image in the digest gate.
 func (a *app) attachImageSBOMs(handler *api.VulnHandler) {
 	handler.WithImages(imagesbom.NewReader(a.db, a.store.blobs)).
+		WithImagePlatform(func(ctx context.Context, digest string) string {
+			return formatdocker.ImagePlatform(ctx, a.store.blobs, digest)
+		}).
 		WithAttestations(attestationSummaries{svc: attestation.NewService(a.log, a.db, a.store.blobs)})
 
 	if a.feat.imageSBOM == nil {

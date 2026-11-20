@@ -718,6 +718,7 @@ Vulnerability, license, secret and AI findings across repositories, worst first:
 
 | Name | In | Type | Required | Description |
 |---|---|---|---|---|
+| `current_images` | query | boolean | no | Only include digest-based hosted Docker findings for manifests reachable from a current tag. Default: `false`. |
 | `type` | query | string | no | Comma-separated finding types to include: `vuln`, `license`, `secret`, `ai`. Default: all four. |
 | `repo` | query | string | no | Only the findings of this repository (by name). |
 | `project` | query | string | no | Only the findings of the repositories of this project (by name). |
@@ -757,6 +758,7 @@ Every finding the list's filters select (no paging), as CSV, JSON or a CycloneDX
 
 | Name | In | Type | Required | Description |
 |---|---|---|---|---|
+| `current_images` | query | boolean | no | Only include digest-based hosted Docker findings for manifests reachable from a current tag. Default: `false`. |
 | `type` | query | string | no | Comma-separated finding types to include: `vuln`, `license`, `secret`, `ai`. Default: all four. |
 | `repo` | query | string | no | Only the findings of this repository (by name). |
 | `project` | query | string | no | Only the findings of the repositories of this project (by name). |
@@ -787,6 +789,7 @@ Findings per type (total, by highest severity, quarantined) and how many of the 
 
 | Name | In | Type | Required | Description |
 |---|---|---|---|---|
+| `current_images` | query | boolean | no | Only include digest-based hosted Docker findings for manifests reachable from a current tag. Default: `false`. |
 | `repo` | query | string | no | Only the findings of this repository (by name). |
 | `project` | query | string | no | Only the findings of the repositories of this project (by name). |
 

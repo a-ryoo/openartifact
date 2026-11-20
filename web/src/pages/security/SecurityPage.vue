@@ -113,6 +113,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
           />
           {{ t('security.filter.kev') }}
         </label>
+        <label class="inline-flex h-9 items-center gap-2 rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground max-md:h-11">
+          <input
+            type="checkbox"
+            :checked="filters.untagged"
+            data-testid="filter-untagged"
+            @change="list.setFilter('untagged', ($event.target as HTMLInputElement).checked)"
+          />
+          {{ t('security.filter.untagged') }}
+        </label>
         <template #after>
           <span class="text-sm text-muted" aria-hidden="true">{{ t('security.sort.label') }}</span>
           <SegmentedControl
@@ -186,7 +195,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         </template>
         <template #cell-artifact="{ row }">
           <div class="min-w-0">
-            <router-link :to="linkOf(row as FindingRow)" class="font-medium text-primary hover:underline">{{ (row as FindingRow).artifact || t('security.table.removedPackage') }}</router-link>
+            <router-link :to="linkOf(row as FindingRow)" :title="(row as FindingRow).source.image_tags?.join('\n')" class="font-medium text-primary hover:underline">{{ (row as FindingRow).artifact || t('security.table.removedPackage') }}</router-link>
             <div class="mt-0.5 flex items-center gap-1.5 text-caption text-muted">
               <FormatBadge v-if="(row as FindingRow).format" :format="(row as FindingRow).format" size="sm" />
               {{ (row as FindingRow).repository }}
@@ -331,7 +340,7 @@ const columns = computed<ListColumn[]>(() => [
 ])
 
 /** Anything beyond the type and repository narrows the list: an empty result is "no matches", not "all clear". */
-const filtersActive = computed(() => hasNarrowingFilters(filters.value) || filters.value.repo !== '')
+const filtersActive = computed(() => hasNarrowingFilters(filters.value) || filters.value.repo !== '' || filters.value.untagged)
 
 const blockState = computed<'never' | 'ai-off' | 'clear' | null>(() => {
   if (neverScanned.value) return 'never'
@@ -340,7 +349,7 @@ const blockState = computed<'never' | 'ai-off' | 'clear' | null>(() => {
 })
 
 function clearAll(): void {
-  list.setFilters({ severity: '', status: '', repo: '', q: '', kev: false, epss_min: '', priority: '' })
+  list.setFilters({ untagged: false, severity: '', status: '', repo: '', q: '', kev: false, epss_min: '', priority: '' })
 }
 
 const linkOf = (row: FindingRow): string => findingLink(row.source)

@@ -24,6 +24,8 @@ type SecurityFindingResponse struct {
 	PackageVersion string `json:"package_version"`
 	// ArtifactID is the artifact the result belongs to, "name@version".
 	ArtifactID string `json:"artifact_id"`
+	// ImageTags lists up to ten current Docker image:tag references to this digest.
+	ImageTags []string `json:"image_tags,omitempty"`
 	// Severity is the highest severity of the finding: critical, high, medium,
 	// low, or none when it has none.
 	Severity string                `json:"severity"`

@@ -2019,6 +2019,7 @@ One stored scan result (a package version of one type) that reports something.
 | `counts` | [SecurityFindingCounts](#securityfindingcounts) | yes | What the result holds per severity. Secret findings count by their own severity (an unknown one as low); a license quarantine is one high and each unresolved license one low; an AI quarantine recommendation is one high and a license review one medium. |
 | `format` | string | yes | Format of the repository (maven, npm, pypi, ...). |
 | `id` | string (uuid) | yes | - |
+| `image_tags` | array of string | no | Up to ten current image:tag references to the scanned Docker manifest. |
 | `kev_count` | integer | yes | Vulnerabilities of a vuln finding that are in the CISA KEV catalog; 0 for the other types. Minimum: 0. |
 | `max_epss` | number | yes | Highest FIRST EPSS score among the vulnerabilities of a vuln finding; null when none is scored (and for the other types). Nullable. Minimum: 0. Maximum: 1. |
 | `package_name` | string | yes | - |
@@ -2585,6 +2586,7 @@ Result of one vulnerability scan of an artifact.
 | `medium_count` | integer | yes | - |
 | `package_name` | string | yes | - |
 | `package_version` | string | yes | - |
+| `platform` | string | no | Platform of the scanned Docker image, when available from the image configuration. |
 | `priority` | [ExploitPriority](#exploitpriority) | yes | `kev` when kev_count is above 0, else `epss` when max_epss reaches the server threshold, else the worst severity. |
 | `quarantined` | boolean | yes | - |
 | `repo_id` | string (uuid) | yes | - |

@@ -100,6 +100,7 @@ export interface VulnFinding {
   severity: string
   cvss: number
   fixed_in: string
+  package?: string
   /** The CVE id the signals were looked up by; '' when the finding has none. */
   cve: string
   kev: boolean
@@ -122,6 +123,7 @@ export function vulnFindings(scan: VulnScan): VulnFinding[] {
       severity,
       cvss: Number(v.cvss ?? 0),
       fixed_in: String(v.fixed_in ?? ''),
+      package: String(v.package ?? ''),
       cve: String(v.cve ?? ''),
       kev: v.kev === true,
       kev_date_added: String(v.kev_date_added ?? ''),
@@ -263,6 +265,7 @@ export type { SecurityFinding }
 
 /** Filters the findings list, summary and export share. `type` is a comma-separated list; empty means every type. */
 export interface FindingFilters {
+  current_images?: boolean
   type?: string
   repo?: string
   severity?: Exclude<FindingSeverity, 'none'>
@@ -294,9 +297,9 @@ export async function listFindings(params: FindingFilters & { limit?: number; cu
   return { findings: res.findings ?? [], has_more: res.has_more ?? false, next_cursor: res.next_cursor }
 }
 
-/** Counts per type and severity; follows the repository filter only. */
-export function getFindingsSummary(repo?: string): Promise<SecuritySummary> {
-  return request<SecuritySummary>(`/api/v1/security/findings/summary${queryString({ repo })}`)
+/** Counts per type and severity; follows the repository and current-image filters. */
+export function getFindingsSummary(repo?: string, currentImages?: boolean): Promise<SecuritySummary> {
+  return request<SecuritySummary>(`/api/v1/security/findings/summary${queryString({ repo, current_images: currentImages })}`)
 }
 
 /** State of the KEV and EPSS feeds and the EPSS score from which a finding has priority `epss`. */

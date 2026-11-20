@@ -34,6 +34,7 @@ export type InboxSort = (typeof SORTS)[number]
  * An absent parameter means "no filter" (and the severity order).
  */
 export const INBOX_FILTERS = {
+  untagged: boolParam(),
   type: enumParam<TypeFilter>(TYPE_FILTERS, 'all'),
   severity: enumParam<SeverityFilter | ''>(['', ...SEVERITY_FILTERS], ''),
   status: enumParam<StatusFilter | ''>(['', ...STATUS_FILTERS], ''),
@@ -46,6 +47,7 @@ export const INBOX_FILTERS = {
 }
 
 export interface InboxFilters {
+  untagged: boolean
   type: TypeFilter
   severity: SeverityFilter | ''
   status: StatusFilter | ''
@@ -60,6 +62,7 @@ export interface InboxFilters {
 /** Request parameters of the inbox filters: only the set ones, `all` becoming "every type". */
 export function toFindingFilters(f: InboxFilters): FindingFilters {
   return {
+    current_images: f.untagged ? undefined : true,
     type: f.type === 'all' ? undefined : f.type,
     repo: f.repo || undefined,
     severity: f.severity || undefined,
@@ -159,13 +162,18 @@ export interface FindingRow {
 }
 
 /** `name@version`, the bare name for formats without versions, '' when the package is gone (the API never sends an id as the name). */
-export function findingArtifact(f: Pick<SecurityFinding, 'package_name' | 'package_version'>): string {
+export function findingArtifact(f: Pick<SecurityFinding, 'package_name' | 'package_version' | 'image_tags'>): string {
+  if (f.image_tags?.length) return f.image_tags[0]!
   return f.package_version ? `${f.package_name}@${f.package_version}` : f.package_name
 }
 
 /** Where a finding's package is reviewed: its Security tab, or the repository's when the package no longer exists. */
-export function findingLink(f: Pick<SecurityFinding, 'repository' | 'package_name' | 'package_version'>): string {
-  if (!f.package_name) return `/repos/${encodeURIComponent(f.repository)}?tab=security`
+export function findingLink(f: Pick<SecurityFinding, 'type' | 'repository' | 'package_name' | 'package_version' | 'artifact_id' | 'format' | 'image_tags'>, tag = f.image_tags?.[0]): string {
+  if (tag) {
+    const separator = tag.lastIndexOf(':')
+    return `${artifactPath(f.repository, tag.slice(0, separator), tag.slice(separator + 1))}?tab=security`
+  }
+  if (!f.package_name || (f.type === 'vuln' && f.format === 'docker' && f.package_name === f.artifact_id && f.artifact_id.startsWith('sha256:'))) return `/repos/${encodeURIComponent(f.repository)}?tab=security`
   return `${artifactPath(f.repository, f.package_name, f.package_version)}?tab=security`
 }
 

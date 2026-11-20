@@ -25,6 +25,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         </div>
       </div>
       <p v-if="vexError" class="text-sm text-danger" role="alert" data-testid="vex-load-error">{{ vexError }}</p>
+      <p v-if="detail.platform" class="text-sm text-muted">
+        {{ t('security.vuln.platform') }} <span class="font-mono text-foreground">{{ detail.platform }}</span>
+      </p>
       <h3 class="text-sm font-semibold">{{ t('security.vuln.findings') }}</h3>
       <VulnScanFindingsTable :scan="detail" :vex-by-vuln="vexByVuln" :can-decide="canAct" @decide="openVexDecision" />
     </div>

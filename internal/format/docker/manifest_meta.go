@@ -6,10 +6,13 @@ package docker
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"strings"
 	"sync"
+
+	"github.com/openartifact/openartifact/internal/storage"
 )
 
 // ociManifestMeta captures the subset of an OCI image manifest / index
@@ -46,6 +49,51 @@ func parseOCIManifestMeta(body []byte) ociManifestMeta {
 // "sha256" metadata key manifests (and blobs) are Put under.
 func manifestBlobKey(digest string) string {
 	return strings.TrimPrefix(digest, "sha256:")
+}
+
+// ImagePlatform reads the platform of a leaf manifest from its config blob.
+// A digest of an index, a missing blob or an unknown platform yields no label.
+func ImagePlatform(ctx context.Context, store storage.BlobStore, digest string) string {
+	var manifest ociManifestMeta
+	if !decodeImageMetadata(ctx, store, digest, &manifest) || manifest.Config == nil {
+		return ""
+	}
+
+	var cfg struct {
+		OS           string `json:"os"`
+		Architecture string `json:"architecture"`
+		Variant      string `json:"variant"`
+	}
+	if !decodeImageMetadata(ctx, store, manifest.Config.Digest, &cfg) ||
+		cfg.OS == "" || cfg.Architecture == "" || cfg.OS == "unknown" || cfg.Architecture == "unknown" {
+		return ""
+	}
+
+	if cfg.Variant != "" {
+		return cfg.OS + "/" + cfg.Architecture + "/" + cfg.Variant
+	}
+
+	return cfg.OS + "/" + cfg.Architecture
+}
+
+func decodeImageMetadata(ctx context.Context, store storage.BlobStore, digest string, out any) bool {
+	sha, ok := strings.CutPrefix(digest, "sha256:")
+	if !ok || len(sha) != 64 {
+		return false
+	}
+
+	if _, err := hex.DecodeString(sha); err != nil {
+		return false
+	}
+
+	rc, err := store.Get(ctx, sha)
+	if err != nil {
+		return false
+	}
+
+	defer func() { _ = rc.Close() }()
+
+	return json.NewDecoder(io.LimitReader(rc, maxConfigBlobBytes)).Decode(out) == nil
 }
 
 // referrerArtifactType is the artifactType the Referrers API reports for the

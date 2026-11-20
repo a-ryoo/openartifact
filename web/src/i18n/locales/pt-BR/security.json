@@ -172,8 +172,8 @@
   "security.table.removedPackage": "Pacote removido",
   "security.empty.title": "Nenhum achado",
   "security.empty.hint": "Os resultados das varreduras aparecem aqui assim que um pacote é varrido.",
-  "security.clear.title": "Tudo limpo",
-  "security.clear.hint": "Todos os pacotes varridos neste escopo estão limpos. Novas varreduras mantêm esta visão atualizada.",
+  "security.clear.title": "Nenhum achado neste escopo",
+  "security.clear.hint": "Os achados aparecem aqui quando uma verificação os relata.",
   "security.never.title": "Nada varrido ainda",
   "security.never.hint": "Varra um pacote para ver os achados dele aqui. A varredura automática no envio é configurada em Configurações, Scanners.",
   "security.never.command": "curl -X POST -H \"Authorization: Bearer $TOKEN\" -d '{\"artifact_id\":\"<id>\"}' $SERVER/api/v1/repositories/<repo>/license/scan",
@@ -292,5 +292,7 @@
   "security.filter.epss": "Pontuação EPSS",
   "security.filter.anyEpss": "Qualquer EPSS",
   "security.filter.epssAtLeast": "EPSS de pelo menos {value}",
-  "security.filter.kev": "Somente KEV"
+  "security.filter.kev": "Somente KEV",
+  "security.filter.untagged": "Incluir verificações sem tags atuais de imagem",
+  "security.vuln.platform": "Plataforma"
 }

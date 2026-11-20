@@ -2234,6 +2234,10 @@ export type SecurityFinding = {
      * Format of the repository (maven, npm, pypi, ...).
      */
     format: string;
+    /**
+     * Up to ten current image:tag references to the scanned Docker manifest.
+     */
+    image_tags?: Array<string>;
     package_name: string;
     package_version: string;
     /**
@@ -2701,6 +2705,10 @@ export type VulnScanResult = {
     package_name: string;
     package_version: string;
     ecosystem: string;
+    /**
+     * Platform of the scanned Docker image, when available from the image configuration.
+     */
+    platform?: string;
     /**
      * One scanner name (osv, trivy or grype) or a sorted comma-joined list such as `osv,trivy` when several scanners were requested.
      */
@@ -6458,6 +6466,10 @@ export type GetApiV1SecurityFindingsData = {
     path?: never;
     query?: {
         /**
+         * Only include digest-based hosted Docker findings for manifests reachable from a current tag.
+         */
+        current_images?: boolean;
+        /**
          * Comma-separated finding types to include: `vuln`, `license`, `secret`, `ai`. Default: all four.
          */
         type?: string;
@@ -6544,6 +6556,10 @@ export type GetApiV1SecurityFindingsSummaryData = {
     path?: never;
     query?: {
         /**
+         * Only include digest-based hosted Docker findings for manifests reachable from a current tag.
+         */
+        current_images?: boolean;
+        /**
          * Only the findings of this repository (by name).
          */
         repo?: string;
@@ -6579,6 +6595,10 @@ export type GetApiV1SecurityFindingsExportData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Only include digest-based hosted Docker findings for manifests reachable from a current tag.
+         */
+        current_images?: boolean;
         /**
          * Comma-separated finding types to include: `vuln`, `license`, `secret`, `ai`. Default: all four.
          */
