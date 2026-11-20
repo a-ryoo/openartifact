@@ -559,6 +559,7 @@ func (h *VulnHandler) handleGetScan(w http.ResponseWriter, r *http.Request) {
 
 	detail := struct {
 		responses.VulnScanResultResponse
+
 		Platform string `json:"platform,omitempty"`
 	}{VulnScanResultResponse: resp}
 	if h.imagePlatform != nil && result.Ecosystem == vuln.ImageEcosystem && imageDigestRe.MatchString(result.ArtifactID) {
