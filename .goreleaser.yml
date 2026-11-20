@@ -75,15 +75,12 @@ checksum:
   algorithm: sha256
 
 release:
-  github:
-    owner: openartifact
-    name: openartifact
   name_template: "OpenArtifact {{ .Version }}"
   footer: |
     Container image (linux/amd64, linux/arm64):
 
     ```sh
-    docker pull ghcr.io/openartifact/openartifact:{{ .Version }}
+    docker pull {{ .Env.IMAGE }}:{{ .Version }}
     ```
 
 changelog:
