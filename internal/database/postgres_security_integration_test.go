@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,6 +144,81 @@ func listAll(t *testing.T, f *securityFixture, p models.FindingListParams) *mode
 	}
 
 	return page
+}
+
+func TestSecurityFindings_CurrentDockerImages(t *testing.T) {
+	f := newSecurityFixture(t)
+	repo := seedRepo(t, f.db, "images", "docker")
+	other := seedRepo(t, f.db, "other-images", "docker")
+	digest := func(c string) string { return "sha256:" + strings.Repeat(c, 64) }
+	amd64, arm64, old := digest("1"), digest("2"), digest("3")
+	index, nested := digest("4"), digest("5")
+
+	blob := mustScan[string](t, f.db, `INSERT INTO blobs (sha256, size_bytes, blob_key)
+		VALUES (repeat('b', 64), 3, repeat('b', 64)) RETURNING id`)
+	manifest := func(repo, image, digest string) string {
+		return mustScan[string](t, f.db, `INSERT INTO docker_manifests (repository_id, image, digest, media_type, blob_id)
+			VALUES ($1, $2, $3, 'application/vnd.oci.image.manifest.v1+json', $4) RETURNING id`, repo, image, digest, blob)
+	}
+	ref := func(parent, child string) {
+		mustExec(t, f.db, `INSERT INTO docker_manifest_refs (manifest_id, repository_id, image, kind, digest)
+			VALUES ($1, $2, 'tools/app', 'manifest', $3)`, parent, repo, child)
+	}
+	tag := func(repo, image, name, digest string) {
+		mustExec(t, f.db, `INSERT INTO docker_tags (repository_id, image, name, manifest_digest)
+			VALUES ($1, $2, $3, $4)`, repo, image, name, digest)
+	}
+
+	for _, d := range []string{amd64, arm64, old} {
+		manifest(repo, "tools/app", d)
+		job := seedScanJob(t, f.db, repo, d, "vuln", "osv", "completed", f.now)
+		seedVulnResult(t, f.db, job, `[{"id":"CVE-7","severity":"CRITICAL"}]`, 1, 0, 0, 0, false)
+	}
+
+	indexID := manifest(repo, "tools/app", index)
+	nestedID := manifest(repo, "tools/app", nested)
+	ref(indexID, amd64)
+	ref(indexID, nested)
+	ref(nestedID, arm64)
+	tag(repo, "tools/app", "stable", index)
+	tag(repo, "tools/app", "debug", amd64)
+	tag(repo, "tools/app", "retired", old)
+	mustExec(t, f.db, `UPDATE docker_tags SET deleted_at = now() WHERE repository_id = $1 AND name = 'retired'`, repo)
+	manifest(other, "tools/app", old)
+	tag(other, "tools/app", "survives-elsewhere", old)
+
+	filter := models.FindingFilter{Scope: models.FindingScope{All: true}, Repo: "images", CurrentImages: true}
+	page := listAll(t, f, models.FindingListParams{FindingFilter: filter})
+	got := map[string][]string{}
+
+	for _, finding := range page.Findings {
+		got[finding.ArtifactID] = finding.ImageTags
+	}
+
+	if len(got) != 2 || !slices.Equal(got[amd64], []string{"images/tools/app:debug", "images/tools/app:stable"}) ||
+		!slices.Equal(got[arm64], []string{"images/tools/app:stable"}) {
+		t.Fatalf("current image findings = %v", got)
+	}
+
+	match := listAll(t, f, models.FindingListParams{FindingFilter: filter, Q: "app:stable", Limit: 1})
+	if len(match.Findings) != 1 || match.Next == nil {
+		t.Fatalf("tag search must find both platform manifests, before pagination: %+v", match)
+	}
+
+	summary, err := f.pg.SecurityFindingsSummary(t.Context(), filter)
+	if err != nil || summary.ByType[models.FindingVuln].Critical != 2 {
+		t.Fatalf("current image summary = %+v, %v", summary, err)
+	}
+
+	filter.CurrentImages = false
+	history := listAll(t, f, models.FindingListParams{FindingFilter: filter})
+	for _, finding := range history.Findings {
+		if finding.ArtifactID == old && len(finding.ImageTags) == 0 {
+			return
+		}
+	}
+
+	t.Fatal("untagged scan must remain available in history")
 }
 
 func TestSecurityFindings_ListOrderAndContent(t *testing.T) {

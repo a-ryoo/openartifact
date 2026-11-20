@@ -172,8 +172,8 @@
   "security.table.removedPackage": "已移除的软件包",
   "security.empty.title": "没有发现项",
   "security.empty.hint": "软件包一旦被扫描，扫描结果就会显示在此处。",
-  "security.clear.title": "一切正常",
-  "security.clear.hint": "此范围内所有已扫描的软件包都是干净的。新的扫描会持续更新此视图。",
+  "security.clear.title": "此范围内没有发现项",
+  "security.clear.hint": "扫描报告的发现项将显示在此处。",
   "security.never.title": "尚未扫描任何内容",
   "security.never.hint": "扫描软件包即可在此处查看其发现项。上传时的自动扫描可在“设置”的“扫描器”中配置。",
   "security.never.command": "curl -X POST -H \"Authorization: Bearer $TOKEN\" -d '{\"artifact_id\":\"<id>\"}' $SERVER/api/v1/repositories/<repo>/license/scan",
@@ -289,5 +289,7 @@
   "security.filter.epss": "EPSS 评分",
   "security.filter.anyEpss": "任意 EPSS",
   "security.filter.epssAtLeast": "EPSS 至少 {value}",
-  "security.filter.kev": "仅 KEV"
+  "security.filter.kev": "仅 KEV",
+  "security.filter.untagged": "包含没有当前镜像标签的扫描",
+  "security.vuln.platform": "平台"
 }

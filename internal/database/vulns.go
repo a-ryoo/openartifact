@@ -667,6 +667,7 @@ func (p *VulnStore) ListSecurityFindings(ctx context.Context, params models.Find
 
 	arg := dbsqlc.ListSecurityFindingsParams{
 		Kinds:         params.Types,
+		CurrentImages: params.CurrentImages,
 		ScopeAll:      params.Scope.All,
 		ScopeProjects: scopeProjects(params.Scope),
 		Repo:          optionalText(params.Repo),
@@ -783,6 +784,7 @@ func findingFromRow(r dbsqlc.ListSecurityFindingsRow) *models.Finding {
 		Repository:     r.RepositoryName,
 		Format:         r.RepositoryFormat,
 		ArtifactID:     r.ArtifactID,
+		ImageTags:      r.ImageTags,
 		PackageName:    r.PackageName,
 		PackageVersion: r.PackageVersion,
 		Scanner:        r.Scanner,
@@ -807,6 +809,7 @@ func findingFromRow(r dbsqlc.ListSecurityFindingsRow) *models.Finding {
 // how many of its repositories were scanned.
 func (p *VulnStore) SecurityFindingsSummary(ctx context.Context, f models.FindingFilter) (*models.FindingsSummary, error) {
 	rows, err := p.q.SecurityFindingsSummary(ctx, dbsqlc.SecurityFindingsSummaryParams{
+		CurrentImages: f.CurrentImages,
 		ScopeAll:      f.Scope.All,
 		ScopeProjects: scopeProjects(f.Scope),
 		Repo:          optionalText(f.Repo),

@@ -30,7 +30,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
         <dt class="text-muted">{{ t('security.detail.package') }}</dt>
         <dd class="min-w-0 break-words">
-          <router-link :to="artifactLink" class="font-medium text-primary hover:underline" data-testid="finding-artifact-link">{{ artifactLabel }}</router-link>
+          <ul v-if="finding.image_tags?.length" class="space-y-1">
+            <li v-for="tag in finding.image_tags" :key="tag">
+              <router-link :to="findingLink(finding, tag)" class="font-medium text-primary hover:underline">{{ tag }}</router-link>
+            </li>
+          </ul>
+          <router-link v-else :to="artifactLink" class="font-medium text-primary hover:underline" data-testid="finding-artifact-link">{{ artifactLabel }}</router-link>
         </dd>
         <dt class="text-muted">{{ t('security.detail.repository') }}</dt>
         <dd class="font-mono text-xs">{{ finding.repository }}</dd>

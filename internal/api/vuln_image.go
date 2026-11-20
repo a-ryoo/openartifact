@@ -63,6 +63,13 @@ func (h *VulnHandler) WithImages(images ImageSBOMs) *VulnHandler {
 	return h
 }
 
+// WithImagePlatform attaches a best-effort reader of the scanned image configuration.
+func (h *VulnHandler) WithImagePlatform(read func(context.Context, string) string) *VulnHandler {
+	h.imagePlatform = read
+
+	return h
+}
+
 // WithAttestations adds the attestation check to the digest gate.
 func (h *VulnHandler) WithAttestations(a AttestationLookup) *VulnHandler {
 	h.attestations = a

@@ -20,6 +20,31 @@ import (
 	"github.com/openartifact/openartifact/internal/format/formattest"
 )
 
+func TestImagePlatformFromConfig(t *testing.T) {
+	_, store := newTestHandler(t, &manifestFakeDB{})
+	put := func(body string) string {
+		t.Helper()
+
+		sha, err := store.Put(t.Context(), strings.NewReader(body), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return "sha256:" + sha
+	}
+	config := put(`{"os":"linux","architecture":"arm64","variant":"v8"}`)
+	manifest := put(`{"config":{"digest":"` + config + `"}}`)
+	index := put(`{"manifests":[]}`)
+
+	if got := ImagePlatform(t.Context(), store, manifest); got != "linux/arm64/v8" {
+		t.Fatalf("platform = %q, want linux/arm64/v8", got)
+	}
+
+	if got := ImagePlatform(t.Context(), store, index); got != "" {
+		t.Fatalf("index platform = %q, want none", got)
+	}
+}
+
 // manifestFakeDB is a minimal in-memory store for manifest-path tests
 // (push, get, referrers, delete). Embeds the handler store so any method these
 // tests don't exercise returns a descriptive error instead of panicking.

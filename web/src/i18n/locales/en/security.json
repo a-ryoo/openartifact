@@ -172,8 +172,8 @@
   "security.table.removedPackage": "Removed package",
   "security.empty.title": "No findings",
   "security.empty.hint": "Scan results appear here as soon as a package is scanned.",
-  "security.clear.title": "All clear",
-  "security.clear.hint": "Every scanned package in this scope is clean. New scans keep this view current.",
+  "security.clear.title": "No findings in this scope",
+  "security.clear.hint": "Findings appear here when a scan reports them.",
   "security.never.title": "Nothing scanned yet",
   "security.never.hint": "Scan a package to see its findings here. Automatic scanning on upload is configured under Settings, Scanners.",
   "security.never.command": "curl -X POST -H \"Authorization: Bearer $TOKEN\" -d '{\"artifact_id\":\"<id>\"}' $SERVER/api/v1/repositories/<repo>/license/scan",
@@ -292,5 +292,7 @@
   "security.filter.epss": "EPSS score",
   "security.filter.anyEpss": "Any EPSS",
   "security.filter.epssAtLeast": "EPSS at least {value}",
-  "security.filter.kev": "KEV only"
+  "security.filter.kev": "KEV only",
+  "security.filter.untagged": "Include scans without current image tags",
+  "security.vuln.platform": "Platform"
 }

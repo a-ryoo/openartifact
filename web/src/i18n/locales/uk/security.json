@@ -172,8 +172,8 @@
   "security.table.removedPackage": "Видалений пакет",
   "security.empty.title": "Виявлень немає",
   "security.empty.hint": "Результати сканування з’являться тут одразу після сканування пакета.",
-  "security.clear.title": "Усе чисто",
-  "security.clear.hint": "Усі проскановані пакети в цій області чисті. Нові сканування підтримують цей перегляд актуальним.",
+  "security.clear.title": "У цьому обсязі немає знахідок",
+  "security.clear.hint": "Тут з’являться знахідки, виявлені під час сканування.",
   "security.never.title": "Сканувань ще не було",
   "security.never.hint": "Проскануйте пакет, щоб побачити його виявлення тут. Автоматичне сканування під час завантаження налаштовується в розділі «Налаштування» → «Сканери».",
   "security.never.command": "curl -X POST -H \"Authorization: Bearer $TOKEN\" -d '{\"artifact_id\":\"<id>\"}' $SERVER/api/v1/repositories/<repo>/license/scan",
@@ -298,5 +298,7 @@
   "security.filter.epss": "Оцінка EPSS",
   "security.filter.anyEpss": "Будь-який EPSS",
   "security.filter.epssAtLeast": "EPSS не менше {value}",
-  "security.filter.kev": "Лише KEV"
+  "security.filter.kev": "Лише KEV",
+  "security.filter.untagged": "Включати сканування без актуальних тегів образів",
+  "security.vuln.platform": "Платформа"
 }

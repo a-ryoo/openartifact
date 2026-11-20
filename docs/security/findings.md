@@ -8,6 +8,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 Use this page to see what your [scans](scanning.md) found in one list, across all repositories and all four finding types: vulnerabilities, licenses, secrets and AI analysis. It also covers a health summary for admins and a counts-only summary per repository. These routes read stored scan results and never start a scan.
 
+For Docker vulnerability scans, Security shows the current image tags that point to the scanned digest. A tag on a multi-platform index also applies to scans of the index's platform manifests. Open a finding for the linked tags, the scanned platform (when its image configuration is available), and the affected packages and fixed versions reported by the scanner. The default view excludes digest-based scans of hosted Docker repositories when no current tag points to the scanned artifact. Enable **Include scans without current image tags** to see them.
+
 ```sh
 curl -sS -H 'Authorization: Bearer <TOKEN>' \
   'HOST/api/v1/security/findings?type=vuln&severity=critical&limit=20'
@@ -63,6 +65,7 @@ A finding has these fields:
 - `package_name` and `package_version`
 - `severity` and `counts` (`critical`, `high`, `medium`, `low`)
 - `title`, `scanner`, `status`, `quarantined`, `scanned_at`
+- `image_tags`, when available, holds up to ten current `image:tag` references to a scanned Docker manifest. The original digest remains in `artifact_id`.
 - `vex_status`, when set
 
 Notes on the fields:
@@ -73,6 +76,7 @@ Notes on the fields:
 | Query | Meaning |
 |---|---|
 | `type` | comma-separated list of `vuln`, `license`, `secret`, `ai`; default all four |
+| `current_images` | `true`: exclude digest-based findings of hosted Docker repositories without a current tag. The default API response includes them. Summary and export accept the same filter. |
 | `repo` | only this repository (by name) |
 | `project` | only the repositories of this project (by name) |
 | `severity` | `critical`, `high`, `medium` or `low`: findings whose **worst** severity is exactly that, so the numbers match the [summary](#the-summary) |

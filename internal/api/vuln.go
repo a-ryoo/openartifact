@@ -80,6 +80,9 @@ type VulnHandler struct {
 	// server has none, which refuses the scan of an image.
 	images ImageSBOMs
 
+	// imagePlatform reads the platform of a Docker scan only when its details are opened.
+	imagePlatform func(context.Context, string) string
+
 	// attestations, when set, adds the attestation presence check to the
 	// digest gate.
 	attestations AttestationLookup
@@ -554,7 +557,16 @@ func (h *VulnHandler) handleGetScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	detail := struct {
+		responses.VulnScanResultResponse
+
+		Platform string `json:"platform,omitempty"`
+	}{VulnScanResultResponse: resp}
+	if h.imagePlatform != nil && result.Ecosystem == vuln.ImageEcosystem && imageDigestRe.MatchString(result.ArtifactID) {
+		detail.Platform = h.imagePlatform(r.Context(), result.ArtifactID)
+	}
+
+	writeJSON(w, http.StatusOK, detail)
 }
 
 // handleQuarantine updates the quarantine status of a vulnerable artifact.
