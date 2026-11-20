@@ -557,11 +557,15 @@ func (h *VulnHandler) handleGetScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	detail := struct {
+		responses.VulnScanResultResponse
+		Platform string `json:"platform,omitempty"`
+	}{VulnScanResultResponse: resp}
 	if h.imagePlatform != nil && result.Ecosystem == vuln.ImageEcosystem && imageDigestRe.MatchString(result.ArtifactID) {
-		resp.Platform = h.imagePlatform(r.Context(), result.ArtifactID)
+		detail.Platform = h.imagePlatform(r.Context(), result.ArtifactID)
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, detail)
 }
 
 // handleQuarantine updates the quarantine status of a vulnerable artifact.
