@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, it, expect } from 'bun:test'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import VulnScanFindingsTable from '../VulnScanFindingsTable.vue'
 import type { VulnScan } from '../../api/security'
 
@@ -53,6 +53,28 @@ describe('VulnScanFindingsTable', () => {
     const rows = w.findAll('[data-testid="finding-row"]')
     expect(rows[0].get('[data-testid="finding-cve"]').text()).toBe('CVE-2026-1')
     expect(rows[1].find('[data-testid="finding-cve"]').exists()).toBe(false)
+  })
+
+  it('opens the source advisory for the selected finding', async () => {
+    const finding = vuln({
+      id: 'RHSA-2024:8906', package: 'openssl@1.2.3', fixed_in: '1.2.4',
+      description: 'Advisory description from Trivy', aliases: ['CVE-2024-4321'],
+      primary_url: 'https://access.redhat.com/errata/RHSA-2024:8906',
+    })
+    const w = mount(VulnScanFindingsTable, {
+      attachTo: document.body,
+      props: { scan: scan([finding]), vexByVuln: new Map(), canDecide: false },
+    })
+    try {
+      await w.get('[data-testid="finding-row"] td:first-child button').trigger('click')
+      await flushPromises()
+      const dialog = w.get('[data-testid="finding-advisory"]').element
+      expect(dialog?.textContent).toContain('Advisory description from Trivy')
+      expect(dialog?.textContent).toContain('CVE-2024-4321')
+      expect(dialog?.querySelector('a')?.href).toBe(finding.primary_url)
+    } finally {
+      w.unmount()
+    }
   })
 
   it('falls back to the severity order when the server sent no exploitation data', () => {

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/openartifact/openartifact/internal/database/dbsqlc"
 	"github.com/openartifact/openartifact/internal/database/models"
 )
 
@@ -72,20 +73,11 @@ func (p *VulnStore) ListOCIScanStates(ctx context.Context, repoID, packageName, 
 
 // RetryOCIScan makes a failed attempt eligible. Concurrent retries coalesce.
 func (p *VulnStore) RetryOCIScan(ctx context.Context, repoID, digest string) (bool, error) {
-	tag, err := p.db.ExecContext(ctx, `
-		UPDATE oci_scan_queue q SET available_at = now(), is_rescan = false
-		WHERE q.repository_id = $1 AND q.digest = $2 AND q.available_at = 'infinity'
-		  AND q.scan_error IS NOT NULL
-		  AND EXISTS (SELECT 1 FROM docker_manifests m
-		      WHERE m.repository_id = q.repository_id AND m.digest = q.digest AND m.deleted_at IS NULL)
-	`, repoID, digest)
+	n, err := p.q.RetryOCIScan(ctx, dbsqlc.RetryOCIScanParams{RepositoryID: repoID, Digest: digest})
 	if err != nil {
 		return false, fmt.Errorf("retry OCI scan: %w", err)
 	}
-	n, err := tag.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("check OCI scan retry: %w", err)
-	}
+
 	return n == 1, nil
 }
 

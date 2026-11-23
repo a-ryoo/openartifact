@@ -90,6 +90,27 @@ func (q *Queries) EnqueueOCIScan(ctx context.Context, arg EnqueueOCIScanParams) 
 	return err
 }
 
+const retryOCIScan = `-- name: RetryOCIScan :execrows
+UPDATE oci_scan_queue q SET available_at = now(), is_rescan = false
+WHERE q.repository_id = $1 AND q.digest = $2 AND q.available_at = 'infinity'
+  AND q.scan_error IS NOT NULL
+  AND EXISTS (SELECT 1 FROM docker_manifests m
+      WHERE m.repository_id = q.repository_id AND m.digest = q.digest AND m.deleted_at IS NULL)
+`
+
+type RetryOCIScanParams struct {
+	RepositoryID string `db:"repository_id" json:"repository_id"`
+	Digest       string `db:"digest" json:"digest"`
+}
+
+func (q *Queries) RetryOCIScan(ctx context.Context, arg RetryOCIScanParams) (int64, error) {
+	result, err := q.db.Exec(ctx, retryOCIScan, arg.RepositoryID, arg.Digest)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const scheduleOCIRescans = `-- name: ScheduleOCIRescans :exec
 WITH RECURSIVE revision AS (
     INSERT INTO system_settings (key, value)

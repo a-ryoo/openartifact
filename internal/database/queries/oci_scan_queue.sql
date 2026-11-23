@@ -78,3 +78,10 @@ ON CONFLICT (repository_id, digest) DO UPDATE
     SET target_revision = EXCLUDED.target_revision, available_at = LEAST(oci_scan_queue.available_at, now()),
         is_rescan = oci_scan_queue.is_rescan OR oci_scan_queue.available_at = 'infinity'
 WHERE oci_scan_queue.target_revision IS NULL OR oci_scan_queue.target_revision < EXCLUDED.target_revision;
+
+-- name: RetryOCIScan :execrows
+UPDATE oci_scan_queue q SET available_at = now(), is_rescan = false
+WHERE q.repository_id = $1 AND q.digest = $2 AND q.available_at = 'infinity'
+  AND q.scan_error IS NOT NULL
+  AND EXISTS (SELECT 1 FROM docker_manifests m
+      WHERE m.repository_id = q.repository_id AND m.digest = q.digest AND m.deleted_at IS NULL);
