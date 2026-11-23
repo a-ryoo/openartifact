@@ -44,10 +44,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: false # Homelab slots share Go’s local caches.
 
       - name: go build
         run: go build ./...
@@ -131,10 +128,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: false
 
       # Integration packages run in parallel, each with its own pools; the default
       # 100 connections runs out. Service containers take no command line, so set
@@ -234,10 +228,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: false
 
       # Runs the linters plus the gofmt/goimports/golines formatters (unformatted code fails the job) from .golangci.yaml.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -268,10 +259,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: false
 
       - name: Run sqlc generate
         run: go tool -modfile=tools/go.mod sqlc generate
@@ -597,8 +585,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: tools/go.sum
+          cache: false
 
       - name: actionlint
         run: go tool -modfile=tools/go.mod actionlint -color
@@ -621,10 +608,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: false
 
       # A merge that kept a marker (including the diff3 "|||||||" base line) ships it into the docs.
       - name: No merge conflict markers

@@ -59,8 +59,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
-          cache-dependency-path: go.sum
+          cache: false
 
       # The SPA is not needed for the API: web/dist only holds its .gitkeep.
       - name: Build the server
