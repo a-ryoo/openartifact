@@ -10,6 +10,8 @@ Use this page to see what your [scans](scanning.md) found in one list, across al
 
 For Docker vulnerability scans, Security shows the current image tags that point to the scanned digest. A tag on a multi-platform index also applies to scans of the index's platform manifests. Open a finding for the linked tags, the scanned platform (when its image configuration is available), and the affected packages and fixed versions reported by the scanner. The default view excludes digest-based scans of hosted Docker repositories when no current tag points to the scanned artifact. Enable **Include scans without current image tags** to see them.
 
+An image version's **Security** tab includes the scans of the manifests the tag currently references. The summary adds counts across the scanned platforms. Administrators can open the findings for each scanned manifest.
+
 ```sh
 curl -sS -H 'Authorization: Bearer <TOKEN>' \
   'HOST/api/v1/security/findings?type=vuln&severity=critical&limit=20'

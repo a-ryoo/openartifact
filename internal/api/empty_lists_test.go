@@ -71,6 +71,10 @@ func (*emptyListsDB) ListSecretScanResults(context.Context, string, bool) ([]*mo
 	return []*models.SecretScanResult{}, nil
 }
 
+func (*emptyListsDB) ListDockerTagVulnScanResults(context.Context, string, string, string, bool) ([]*models.VulnScanResult, error) {
+	return nil, nil
+}
+
 func (*emptyListsDB) ListVulnScanResults(context.Context, string, bool) ([]*models.VulnScanResult, error) {
 	return []*models.VulnScanResult{}, nil
 }

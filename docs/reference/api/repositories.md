@@ -1802,13 +1802,15 @@ Fields of the `200` response (`application/json`):
 
 List vulnerability scans
 
-List vulnerability scans for a repository
+List vulnerability scans for a repository. Supply package_name and version together to list the latest scans of a tag and its platform manifests in a hosted Docker repository.
 
 **Parameters**
 
 | Name | In | Type | Required | Description |
 |---|---|---|---|---|
 | `name` | path | string | yes | - |
+| `package_name` | query | string | no | Full Docker image name, including the repository prefix. |
+| `version` | query | string | no | Docker tag to look up. |
 
 **Responses**
 

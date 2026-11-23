@@ -71,7 +71,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       <p v-else-if="scans.length === 0" class="max-w-2xl text-sm text-muted" data-testid="sec-no-scans">{{ t('artifact.security.noScans') }}</p>
       <div v-else class="space-y-6">
         <div v-for="scan in scans" :key="scan.id">
-          <h3 v-if="scans.length > 1" class="mb-2 font-mono text-xs text-muted">{{ scan.package_name }} · {{ scan.scanner }}</h3>
+          <h3 v-if="scans.length > 1 || scan.platform" class="mb-2 font-mono text-xs text-muted">{{ scan.platform || scan.package_name }} · {{ scan.scanner }}</h3>
           <p v-if="scan.scan_status === 'failed' || scan.scan_status === 'partial'" role="status" class="mb-2 text-sm text-warning">{{ scan.scan_error || t('artifact.security.scanFailed') }}</p>
           <VulnScanFindingsTable :scan="scan" :vex-by-vuln="vexByScan[scan.artifact_id] ?? new Map()" @decide="decide(scan, $event)" />
         </div>
@@ -136,8 +136,11 @@ async function load(): Promise<void> {
   if (!ctx.caps.value.admin || !entry) return
   loading.value = true
   try {
+    const isDockerTag = ctx.format.value === 'docker' && ctx.repository.value?.repo_type === 'hosted'
+    const tag = isDockerTag ? { package_name: ctx.pkgName.value, version: entry.version } : undefined
+    const rows = await listVulnScans(ctx.repoName.value, tag)
     const ids = new Set(entry.files.map((f) => f.id))
-    const listed = (await listVulnScans(ctx.repoName.value)).filter((s) => ids.has(s.artifact_id))
+    const listed = tag ? rows : rows.filter((s) => ids.has(s.artifact_id))
     const [full, vex] = await Promise.all([
       Promise.all(listed.map((s) => getVulnScan(ctx.repoName.value, s.id))),
       Promise.all(listed.map((s) => listVexStatements(ctx.repoName.value, s.artifact_id))),
@@ -161,5 +164,6 @@ async function afterDecision(): Promise<void> {
   await load()
 }
 
-watch(() => [ctx.entry.value?.version, ctx.caps.value.admin, ctx.summary.value?.scanned_at], () => void load(), { immediate: true })
+watch(() => [ctx.repoName.value, ctx.pkgName.value, ctx.entry.value?.version, ctx.repository.value, ctx.caps.value.admin,
+  ctx.summary.value?.scanned_at], () => void load(), { immediate: true })
 </script>

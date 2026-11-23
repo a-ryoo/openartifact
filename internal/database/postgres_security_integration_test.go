@@ -210,6 +210,39 @@ func TestSecurityFindings_CurrentDockerImages(t *testing.T) {
 		t.Fatalf("current image summary = %+v, %v", summary, err)
 	}
 
+	t.Run("tag version security", func(t *testing.T) {
+		mustExec(t, f.db, `UPDATE vuln_results vr SET package_name = 'images/tools/app', package_version = 'stable'
+			FROM scan_jobs sj JOIN artifact_refs ref ON ref.id = sj.artifact_ref_id
+			WHERE vr.scan_job_id = sj.id AND ref.repository_id = $1 AND ref.artifact_path = $2`, repo, old)
+		for _, test := range []struct {
+			name string
+			tag  string
+			want []string
+		}{
+			{"images/tools/app", "stable", []string{amd64, arm64}},
+			{"images/tools/app", "debug", []string{amd64}},
+			{"images/tools/app", "retired", nil},
+			{"other-images/tools/app", "survives-elsewhere", nil},
+		} {
+			results, err := f.pg.ListDockerTagVulnScanResults(t.Context(), repo, test.name, test.tag, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var digests []string
+			for _, result := range results {
+				digests = append(digests, result.ArtifactID)
+			}
+			slices.Sort(digests)
+			if !slices.Equal(digests, test.want) {
+				t.Fatalf("%s:%s returned %v, want %v", test.name, test.tag, digests, test.want)
+			}
+			counts, err := f.pg.RepoSecuritySummary(t.Context(), repo, test.name, test.tag)
+			if err != nil || counts.VulnCritical != len(test.want) || (counts.ScannedAt == nil) != (len(test.want) == 0) {
+				t.Fatalf("%s:%s summary = %+v, %v", test.name, test.tag, counts, err)
+			}
+		}
+	})
+
 	filter.CurrentImages = false
 	history := listAll(t, f, models.FindingListParams{FindingFilter: filter})
 	for _, finding := range history.Findings {

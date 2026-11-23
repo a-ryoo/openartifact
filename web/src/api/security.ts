@@ -63,8 +63,8 @@ export async function listVulnScanners(repo: string): Promise<VulnScannerStatus[
  */
 export type VulnScan = VulnScanResult
 
-export async function listVulnScans(repo: string): Promise<VulnScan[]> {
-  const res = await request<{ scans?: VulnScan[] }>(`${repoBase(repo)}/vuln/scans`)
+export async function listVulnScans(repo: string, tag?: { package_name: string; version: string }): Promise<VulnScan[]> {
+  const res = await request<{ scans?: VulnScan[] }>(`${repoBase(repo)}/vuln/scans${queryString(tag ?? {})}`)
   return res.scans ?? []
 }
 

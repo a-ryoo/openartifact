@@ -6952,7 +6952,16 @@ export type GetApiV1RepositoriesByNameVulnScansData = {
     path: {
         name: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Full Docker image name, including the repository prefix.
+         */
+        package_name?: string;
+        /**
+         * Docker tag to look up.
+         */
+        version?: string;
+    };
     url: '/api/v1/repositories/{name}/vuln/scans';
 };
 

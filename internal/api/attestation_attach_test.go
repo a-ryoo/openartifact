@@ -106,6 +106,10 @@ func (d *attachDB) ListVEXStatements(context.Context, string, string) ([]*models
 	return nil, nil
 }
 
+func (d *attachDB) ListDockerTagVulnScanResults(context.Context, string, string, string, bool) ([]*models.VulnScanResult, error) {
+	return nil, nil
+}
+
 func (d *attachDB) ListVulnScanResults(context.Context, string, bool) ([]*models.VulnScanResult, error) {
 	return nil, nil
 }
