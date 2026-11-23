@@ -32,6 +32,7 @@ type imageDB struct {
 
 	public      bool
 	format      string
+	repoType    string
 	targets     []*models.PermissionTarget
 	policies    []*models.LicensePolicy
 	quarantined bool
@@ -50,7 +51,7 @@ func (db *imageDB) GetRepositoryByName(_ context.Context, name string) (*models.
 		format = "docker"
 	}
 
-	return &models.Repository{ID: testRepoID, Name: name, Format: format, Public: db.public}, nil
+	return &models.Repository{ID: testRepoID, Name: name, Format: format, RepoType: db.repoType, Public: db.public}, nil
 }
 
 func (db *imageDB) GetPermissionTargetsForPrincipal(context.Context, string, []string) ([]*models.PermissionTarget, error) {
@@ -189,6 +190,48 @@ func serveImage(h *VulnHandler, p *auth.Principal, method, target, body string) 
 	router.ServeHTTP(rw, req)
 
 	return rw
+}
+
+type ociRetryStore struct {
+	ociScanStore
+
+	retriedDigest string
+}
+
+func (s *ociRetryStore) RetryOCIScan(_ context.Context, _, digest string) (bool, error) {
+	s.retriedDigest = digest
+
+	return true, nil
+}
+
+func TestRetryOCIScanDigest(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		digest string
+		status int
+	}{
+		{"literal colon", imageDigest, http.StatusAccepted},
+		{"encoded colon", strings.Replace(imageDigest, ":", "%3A", 1), http.StatusAccepted},
+		{"double encoded colon", strings.Replace(imageDigest, ":", "%253A", 1), http.StatusBadRequest},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &ociRetryStore{}
+			handler := newImageHandler(t, &imageDB{repoType: "hosted"}).WithOCIScans(store)
+			path := "/api/v1/repositories/img/vuln/oci-scans/" + tt.digest + "/retry"
+			response := serveImage(handler, adminPrincipal(), http.MethodPost, path, "")
+			if response.Code != tt.status {
+				t.Fatalf("status = %d, want %d: %s", response.Code, tt.status, response.Body)
+			}
+
+			want := imageDigest
+			if tt.status == http.StatusBadRequest {
+				want = ""
+			}
+			if store.retriedDigest != want {
+				t.Errorf("retried digest = %q, want %q", store.retriedDigest, want)
+			}
+		})
+	}
 }
 
 func tokenWith(actions ...string) (*auth.Principal, []*models.PermissionTarget) {
