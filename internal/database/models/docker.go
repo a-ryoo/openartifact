@@ -71,9 +71,11 @@ type DockerManifest struct {
 	// digests the manifest needs pushed. CreateDockerManifest verifies, under
 	// the lock registry GC takes exclusively, that the repository holds each of
 	// them for this image, and fails with ErrDockerBlobsMissing otherwise.
-	RequiredBlobs []string  `db:"-"`
-	CreatedAt     time.Time `db:"created_at"`
-	UpdatedAt     time.Time `db:"updated_at"`
+	RequiredBlobs []string `db:"-"`
+	// AutoScan records background work in the same transaction as an image push.
+	AutoScan  bool      `db:"-"`
+	CreatedAt time.Time `db:"created_at"`
+	UpdatedAt time.Time `db:"updated_at"`
 	// ExpiresAt is the quay.expires-after deadline the manifest declared when it
 	// was pushed; nil when it declares none (or its repository does not honour it).
 	ExpiresAt *time.Time `db:"expires_at"`

@@ -4363,6 +4363,10 @@
           "artifact_id": {
             "type": "string"
           },
+          "platform": {
+            "type": "string",
+            "description": "OCI platform of a manifest report in a tag-scoped listing."
+          },
           "format": {
             "type": "string"
           },
@@ -5544,6 +5548,82 @@
           "priority"
         ]
       },
+      "OCIScanFinding": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "package": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "package",
+          "severity"
+        ]
+      },
+      "OCIScanState": {
+        "type": "object",
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "waiting_for_sbom",
+              "queued",
+              "scanning",
+              "failed",
+              "completed"
+            ]
+          },
+          "error": {
+            "type": "string"
+          },
+          "report_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "database_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "changes": {
+            "type": "object",
+            "properties": {
+              "added": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OCIScanFinding"
+                }
+              },
+              "removed": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OCIScanFinding"
+                }
+              }
+            },
+            "required": [
+              "added",
+              "removed"
+            ]
+          }
+        },
+        "required": [
+          "digest",
+          "status"
+        ]
+      },
       "AnnotatedVulnerability": {
         "description": "One vulnerability finding of a scan with its ExploitAnnotation.",
         "allOf": [
@@ -5556,6 +5636,14 @@
               },
               "summary": {
                 "type": "string"
+              },
+              "description": {
+                "type": "string",
+                "description": "Full advisory description, when supplied by the scanner."
+              },
+              "primary_url": {
+                "type": "string",
+                "description": "Primary advisory link, when supplied by the scanner."
               },
               "severity": {
                 "type": "string",
@@ -10559,6 +10647,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "package_name",
+            "in": "query",
+            "description": "Use with version to select SBOM reports of a hosted Docker tag.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "The Docker tag when package_name is set.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -13862,6 +13966,115 @@
           },
           "403": {
             "description": "Admin access required"
+          }
+        }
+      }
+    },
+    "/api/v1/repositories/{name}/vuln/oci-scans": {
+      "get": {
+        "summary": "List automatic OCI scan states",
+        "description": "List the platform scans of one hosted Docker tag. Requires an administrator.",
+        "tags": [
+          "Repositories",
+          "Scanning"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Hosted Docker repository name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "package_name",
+            "in": "query",
+            "required": true,
+            "description": "Repository-qualified image name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": true,
+            "description": "Image tag.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform scan states and the latest successful report IDs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scans": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OCIScanState"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid tag selection."
+          },
+          "403": {
+            "description": "Administrator access required."
+          }
+        }
+      }
+    },
+    "/api/v1/repositories/{name}/vuln/oci-scans/{digest}/retry": {
+      "post": {
+        "summary": "Retry a failed automatic OCI scan",
+        "description": "Make a failed image scan eligible for processing. Requires an administrator.",
+        "tags": [
+          "Repositories",
+          "Scanning"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Hosted Docker repository name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "digest",
+            "in": "path",
+            "required": true,
+            "description": "Platform manifest digest.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Queued."
+          },
+          "400": {
+            "description": "Invalid digest or repository."
+          },
+          "403": {
+            "description": "Administrator access required."
+          },
+          "409": {
+            "description": "No failed attempt eligible to retry."
           }
         }
       }

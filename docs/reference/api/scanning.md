@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Scanning API
 
-37 endpoints. Request and response schemas are described on the [schemas page](schemas.md); the other tags are listed in the [API index](README.md).
+39 endpoints. Request and response schemas are described on the [schemas page](schemas.md); the other tags are listed in the [API index](README.md).
 
 ## Endpoints
 
@@ -463,6 +463,56 @@ Counts only: vulnerabilities by severity, license violations, secret findings, A
 | `400` | `version` without `package_name`, or a value that is too long (`validation_failed`) | - |
 | `403` | No read access to the repository | - |
 | `404` | Repository not found | - |
+
+### `GET /api/v1/repositories/{name}/vuln/oci-scans`
+
+List automatic OCI scan states
+
+List the platform scans of one hosted Docker tag. Requires an administrator.
+
+**Parameters**
+
+| Name | In | Type | Required | Description |
+|---|---|---|---|---|
+| `name` | path | string | yes | Hosted Docker repository name. |
+| `package_name` | query | string | yes | Repository-qualified image name. |
+| `version` | query | string | yes | Image tag. |
+
+**Responses**
+
+| Status | Description | Body |
+|---|---|---|
+| `200` | Platform scan states and the latest successful report IDs. | `application/json`: object |
+| `400` | Invalid tag selection. | - |
+| `403` | Administrator access required. | - |
+
+Fields of the `200` response (`application/json`):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `scans` | array of [OCIScanState](schemas.md#ociscanstate) | no | - |
+
+### `POST /api/v1/repositories/{name}/vuln/oci-scans/{digest}/retry`
+
+Retry a failed automatic OCI scan
+
+Make a failed image scan eligible for processing. Requires an administrator.
+
+**Parameters**
+
+| Name | In | Type | Required | Description |
+|---|---|---|---|---|
+| `name` | path | string | yes | Hosted Docker repository name. |
+| `digest` | path | string | yes | Platform manifest digest. |
+
+**Responses**
+
+| Status | Description | Body |
+|---|---|---|
+| `202` | Queued. | - |
+| `400` | Invalid digest or repository. | - |
+| `403` | Administrator access required. | - |
+| `409` | No failed attempt eligible to retry. | - |
 
 ### `POST /api/v1/repositories/{name}/vuln/scan`
 

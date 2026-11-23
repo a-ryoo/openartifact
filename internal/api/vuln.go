@@ -89,6 +89,7 @@ type VulnHandler struct {
 	// attestations, when set, adds the attestation presence check to the
 	// digest gate.
 	attestations AttestationLookup
+	ociScans     ociScanStore
 
 	// fwd, when set (server.role=web), receives the scans for a worker process
 	// to run (ForwardScansTo).
@@ -207,6 +208,8 @@ func (h *VulnHandler) RegisterRoutes(authedRouter chi.Router, pathPrefix string)
 	authedRouter.Get(pathPrefix+"/gate", h.handleGateDigest)
 	authedRouter.Get(pathPrefix+"/vuln/scanners", h.handleListScanners)
 	authedRouter.Get(pathPrefix+"/vuln/scans", h.handleListScans)
+	authedRouter.Get(pathPrefix+"/vuln/oci-scans", h.handleOCIScanStates)
+	authedRouter.Post(pathPrefix+"/vuln/oci-scans/{digest}/retry", h.handleRetryOCIScan)
 	authedRouter.Get(pathPrefix+"/vuln/scans/{id}", h.handleGetScan)
 	authedRouter.Get(pathPrefix+"/vuln/scans/{id}/export", h.handleExportScan)
 	authedRouter.Get(pathPrefix+"/vuln/scans/{id}/gate", h.handleGateScan)
@@ -726,7 +729,7 @@ func vulnScanResultToMap(
 		PackageName:     result.PackageName,
 		PackageVersion:  result.PackageVersion,
 		Ecosystem:       result.Ecosystem,
-		Scanner:         result.Scanner,
+		Scanner:         publicVulnScanner(result.Scanner),
 		ScanStatus:      result.ScanStatus,
 		Vulnerabilities: findings,
 		VulnCount:       result.VulnCount,

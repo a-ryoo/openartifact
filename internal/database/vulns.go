@@ -112,7 +112,11 @@ func vulnOverviewWhere(params models.VulnScanListParams, args []any) (string, []
 	case "osv", "trivy", "grype":
 		// sj.scanner holds one name or several joined by ",".
 		args = append(args, params.Scanner)
-		where += fmt.Sprintf(" AND $%d = ANY(string_to_array(sj.scanner, ','))", len(args))
+		predicate := fmt.Sprintf("$%d = ANY(string_to_array(sj.scanner, ','))", len(args))
+		if params.Scanner == "trivy" {
+			predicate = fmt.Sprintf("(%s OR sj.scanner = '%s')", predicate, models.OCIAutomaticScanner)
+		}
+		where += " AND " + predicate
 	default:
 		return "", nil, fmt.Errorf("%w: scanner %q", ErrInvalidVulnScanFilter, params.Scanner)
 	}
@@ -392,18 +396,25 @@ func vulnScanStatusToJob(status string) string {
 
 // CreateVulnScanResult creates or updates a vulnerability scan result.
 func (p *VulnStore) CreateVulnScanResult(ctx context.Context, result *models.VulnScanResult) error {
+	return createVulnScanResult(ctx, p.db, result)
+}
+
+type vulnResultWriter interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func createVulnScanResult(ctx context.Context, db vulnResultWriter, result *models.VulnScanResult) error {
 	vulnsJSON, err := json.Marshal(result.Vulnerabilities)
 	if err != nil {
 		return fmt.Errorf("failed to marshal vulnerabilities: %w", err)
 	}
 
-	// A nil ScannedAt (a job still scanning) is stored as NULL, not the zero time.
 	scannedAt := sql.NullTime{}
 	if result.ScannedAt != nil {
 		scannedAt = sql.NullTime{Time: *result.ScannedAt, Valid: true}
 	}
 
-	err = p.db.QueryRowContext(ctx, `
+	err = db.QueryRowContext(ctx, `
 		WITH ref AS (
 			INSERT INTO artifact_refs (repository_id, artifact_path, format)
 			VALUES ($1, $2, COALESCE((SELECT format FROM repositories WHERE id = $1), 'unknown'))

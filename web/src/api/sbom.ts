@@ -7,7 +7,7 @@ import type { SbomReport } from './generated/types.gen'
 
 /** One stored SBOM report; `artifact_id` is the package row (file) it describes. */
 export type SbomItem = Required<Pick<SbomReport, 'id' | 'artifact_id' | 'format'>> &
-  Pick<SbomReport, 'spec_version' | 'component_count' | 'generated_at' | 'created_at'>
+  Pick<SbomReport, 'spec_version' | 'component_count' | 'generated_at' | 'created_at' | 'platform'>
 
 /** Document formats a report can be generated in. */
 export const SBOM_FORMATS = ['cyclonedx', 'spdx', 'spdx-json', 'spdx3-json'] as const
@@ -24,8 +24,9 @@ const sbomUrl = (repo: string): string => `/api/v1/repositories/${encodeURICompo
 
 const downloadUrl = (repo: string, id: string): string => `${sbomUrl(repo)}/${encodeURIComponent(id)}/download`
 
-export async function listSboms(repo: string): Promise<SbomItem[]> {
-  const res = await request<{ reports?: SbomItem[] }>(sbomUrl(repo))
+export async function listSboms(repo: string, tag?: { package_name: string; version: string }): Promise<SbomItem[]> {
+  const query = tag ? `?${new URLSearchParams(tag)}` : ''
+  const res = await request<{ reports?: SbomItem[] }>(sbomUrl(repo) + query)
   return res?.reports ?? []
 }
 

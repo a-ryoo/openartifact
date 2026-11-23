@@ -295,18 +295,25 @@ type trivyResult struct {
 }
 
 type trivyVulnerability struct {
-	VulnerabilityID string               `json:"VulnerabilityID"`
-	Title           string               `json:"Title"`
-	Severity        string               `json:"Severity"`
-	CVSS            map[string]trivyCVSS `json:"CVSS"`
-	FixedVersion    string               `json:"FixedVersion"`
-	References      []string             `json:"References"`
-	PublishedDate   string               `json:"PublishedDate"`
-	CweIDs          []string             `json:"CweIDs"`
+	VulnerabilityID  string               `json:"VulnerabilityID"`
+	Title            string               `json:"Title"`
+	Description      string               `json:"Description"`
+	PkgName          string               `json:"PkgName"`
+	InstalledVersion string               `json:"InstalledVersion"`
+	VendorIDs        []string             `json:"VendorIDs"`
+	PrimaryURL       string               `json:"PrimaryURL"`
+	Severity         string               `json:"Severity"`
+	CVSS             map[string]trivyCVSS `json:"CVSS"`
+	FixedVersion     string               `json:"FixedVersion"`
+	References       []string             `json:"References"`
+	PublishedDate    string               `json:"PublishedDate"`
+	CweIDs           []string             `json:"CweIDs"`
 }
 
 type trivyCVSS struct {
-	V3Score float64 `json:"V3Score"`
+	V2Score  float64 `json:"V2Score"`
+	V3Score  float64 `json:"V3Score"`
+	V40Score float64 `json:"V40Score"`
 }
 
 // Scan runs trivy on a temporary manifest file.
@@ -419,30 +426,7 @@ func (s *TrivyScanner) parseTrivyOutput(data []byte) ([]models.Vulnerability, er
 
 			seen[tv.VulnerabilityID] = true
 
-			vuln := models.Vulnerability{
-				ID:          tv.VulnerabilityID,
-				Summary:     tv.Title,
-				FixedIn:     tv.FixedVersion,
-				PublishedAt: tv.PublishedDate,
-				References:  tv.References,
-				CWEs:        tv.CweIDs,
-			}
-
-			// The report holds one score per source (nvd, ghsa, redhat, ...) in a
-			// map: take the highest, so the stored score does not depend on the
-			// order the map happens to be iterated.
-			var cvssScore float64
-
-			for _, cvss := range tv.CVSS {
-				cvssScore = max(cvssScore, cvss.V3Score)
-			}
-
-			vuln.CVSS = cvssScore
-
-			// Map trivy severity to our format
-			vuln.Severity = mapScannerSeverity(tv.Severity, cvssScore)
-
-			vulns = append(vulns, vuln)
+			vulns = append(vulns, tv.model())
 		}
 	}
 
@@ -451,6 +435,24 @@ func (s *TrivyScanner) parseTrivyOutput(data []byte) ([]models.Vulnerability, er
 	}
 
 	return vulns, nil
+}
+
+func (tv trivyVulnerability) model() models.Vulnerability {
+	var score, fallback float64
+	for _, cvss := range tv.CVSS {
+		score = max(score, cvss.V3Score)
+		fallback = max(fallback, cvss.V40Score, cvss.V2Score)
+	}
+	if score == 0 {
+		score = fallback
+	}
+
+	return models.Vulnerability{
+		ID: tv.VulnerabilityID, Summary: tv.Title, Description: tv.Description,
+		FixedIn: tv.FixedVersion, PublishedAt: tv.PublishedDate, References: tv.References,
+		PrimaryURL: tv.PrimaryURL, CWEs: tv.CweIDs, CVSS: score, Aliases: tv.VendorIDs,
+		Severity: mapScannerSeverity(tv.Severity, score),
+	}
 }
 
 // mapScannerSeverity maps the severity a scanner (Trivy, Grype) reports to the

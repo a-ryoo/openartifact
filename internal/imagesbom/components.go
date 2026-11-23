@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 
 	"github.com/openartifact/openartifact/internal/database/models"
@@ -43,6 +44,40 @@ func (r *Reader) HasSBOM(ctx context.Context, repoID, digest string) (bool, erro
 	}
 
 	return slices.ContainsFunc(reports, func(rep *models.SBOMReport) bool { return rep.BlobSHA256 != "" }), nil
+}
+
+// Body reads one stored document for a whole-image scan.
+func (r *Reader) Body(ctx context.Context, repoID, digest string) ([]byte, error) {
+	reports, err := r.db.GetSBOMReportsByArtifact(ctx, repoID, ArtifactID(digest))
+	if err != nil {
+		return nil, fmt.Errorf("list SBOM reports: %w", err)
+	}
+
+	for _, report := range reports {
+		if report.BlobSHA256 == "" {
+			continue
+		}
+
+		rc, err := r.blobs.Get(ctx, report.BlobSHA256)
+		if err != nil {
+			return nil, fmt.Errorf("read SBOM blob: %w", err)
+		}
+
+		defer func() { _ = rc.Close() }()
+
+		data, err := io.ReadAll(io.LimitReader(rc, MaxDocumentBytes+1))
+		if err != nil {
+			return nil, fmt.Errorf("read SBOM document: %w", err)
+		}
+
+		if len(data) > MaxDocumentBytes {
+			return nil, ErrTooLarge
+		}
+
+		return data, nil
+	}
+
+	return nil, ErrNoSBOM
 }
 
 // Components returns the union of the packages every SBOM report of the image

@@ -239,7 +239,7 @@ func vulnOverviewRowToResponse(s *models.VulnScanOverviewRow, threshold float64)
 		PackageName:      s.PackageName,
 		PackageVersion:   s.PackageVersion,
 		Ecosystem:        s.Ecosystem,
-		Scanner:          s.Scanner,
+		Scanner:          publicVulnScanner(s.Scanner),
 		ScanStatus:       s.ScanStatus,
 		VulnCount:        s.VulnCount,
 		CriticalCount:    s.CriticalCount,

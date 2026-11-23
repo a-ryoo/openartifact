@@ -15,6 +15,7 @@ import (
 	"github.com/openartifact/openartifact/internal/auth"
 	"github.com/openartifact/openartifact/internal/backup"
 	"github.com/openartifact/openartifact/internal/dtrack"
+	formatdocker "github.com/openartifact/openartifact/internal/format/docker"
 	"github.com/openartifact/openartifact/internal/format/plugin"
 	"github.com/openartifact/openartifact/internal/importmeta"
 	"github.com/openartifact/openartifact/internal/license"
@@ -352,7 +353,11 @@ func (a *app) registerSupplyChainRoutes() {
 	attestHandler.RegisterAuthed(authedAPI)
 
 	sbomHandler := api.NewSBOMHandler(db, log, evaluator, sbomGen, a.store.blobs).WithAttestation(attestSvc)
-	sbomHandler.WithAttacher(a.feat.attacher).RegisterAuthed(authedAPI)
+	sbomHandler.WithAttacher(a.feat.attacher).
+		WithDockerTagReports(db.ListDockerTagSBOMReports, func(ctx context.Context, digest string) string {
+			return formatdocker.ImagePlatform(ctx, a.store.blobs, digest)
+		}).
+		RegisterAuthed(authedAPI)
 	api.NewAttestationAttachHandler(db, log, evaluator, a.feat.attacher, a.store.blobs).RegisterAuthed(authedAPI)
 	api.NewVEXHandler(db, log, evaluator, sbomGen).WithAttestation(attestSvc).RegisterAuthed(authedAPI)
 	api.NewOCIAttestationsHandler(db, log, evaluator, attestation.NewService(log, db, a.store.blobs)).RegisterAuthed(authedAPI)

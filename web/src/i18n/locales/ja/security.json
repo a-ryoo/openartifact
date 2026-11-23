@@ -100,6 +100,8 @@
   "security.vuln.finding.cvss": "CVSS",
   "security.vuln.finding.fixedIn": "修正バージョン",
   "security.vuln.finding.summary": "概要",
+  "security.vuln.finding.aliases": "関連アドバイザリ",
+  "security.vuln.finding.advisory": "元のアドバイザリ",
   "security.vuln.rowAction": "{action}: {name}",
   "security.vuln.selectEcosystem": "エコシステム",
   "security.vuln.ecosystemHint": "パッケージのフォーマットから自動入力されます。スキャナーが別のエコシステムを想定している場合のみ変更してください。",

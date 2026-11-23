@@ -51,6 +51,7 @@ var driftTable = []driftDecision{
 	{pattern: "search", tools: []string{"search_artifacts"}},
 	{pattern: "repositories/ai-analysis", tools: []string{"list_ai_analyses", "get_artifact_analysis"}},
 	{pattern: "repositories/vuln/scans", tools: []string{"get_vulnerabilities"}},
+	{pattern: "repositories/vuln/oci-scans", reason: "platform queue status and comparison for the version Security tab"},
 
 	// Availability and the minimum-age gate.
 	{pattern: "repositories/availability", tools: []string{"check_availability", "check_dependencies"}},

@@ -230,6 +230,7 @@ var NotJournaled = map[string]string{
 	"audit_logs":       "audit trail; kept by database backups",
 	"oci_attestations": "index of the attestations attached to docker images, derived from the manifests and blobs " +
 		"the journal restores; POST /attestations/reverify?subject=&image= rebuilds the rows of an image",
+	"oci_scan_queue": "automatic scan scheduling state, kept by database backups",
 	"repository_attestation_trust": "operator policy (trusted keys, Fulcio roots and identities) of a repository; " +
 		"kept by database backups",
 	"bundle_promotions": "promotion history of a release bundle (its stage rides with release_bundles); " +

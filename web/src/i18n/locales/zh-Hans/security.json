@@ -100,6 +100,8 @@
   "security.vuln.finding.cvss": "CVSS",
   "security.vuln.finding.fixedIn": "修复版本",
   "security.vuln.finding.summary": "摘要",
+  "security.vuln.finding.aliases": "相关安全公告",
+  "security.vuln.finding.advisory": "原始安全公告",
   "security.vuln.rowAction": "{action}：{name}",
   "security.vuln.selectEcosystem": "生态系统",
   "security.vuln.ecosystemHint": "根据软件包格式自动填写；仅当扫描器需要其他生态系统时才修改。",

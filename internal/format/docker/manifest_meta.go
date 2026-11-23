@@ -26,7 +26,10 @@ type ociManifestMeta struct {
 	} `json:"subject"`
 	ArtifactType string            `json:"artifactType"` //nolint:tagliatelle // OCI image-spec wire format is camelCase
 	Annotations  map[string]string `json:"annotations"`
-	Config       *struct {
+	Layers       []struct {
+		MediaType string `json:"mediaType"` //nolint:tagliatelle // OCI image-spec wire format is camelCase
+	} `json:"layers"`
+	Config *struct {
 		MediaType string `json:"mediaType"` //nolint:tagliatelle // OCI image-spec wire format is camelCase
 		Digest    string `json:"digest"`
 	} `json:"config"`
@@ -42,6 +45,30 @@ func parseOCIManifestMeta(body []byte) ociManifestMeta {
 	_ = json.Unmarshal(body, &m)
 
 	return m
+}
+
+// runnableImage excludes indexes, artifact manifests and BuildKit attestations.
+func (m ociManifestMeta) runnableImage(mediaType string) bool {
+	switch mediaType {
+	case "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json":
+	default:
+		return false
+	}
+	if m.Subject != nil || m.ArtifactType != "" || m.Config == nil {
+		return false
+	}
+	switch m.Config.MediaType {
+	case "application/vnd.oci.image.config.v1+json", "application/vnd.docker.container.image.v1+json":
+	default:
+		return false
+	}
+	for _, layer := range m.Layers {
+		if !strings.HasPrefix(layer.MediaType, "application/vnd.oci.image.layer.") &&
+			!strings.HasPrefix(layer.MediaType, "application/vnd.docker.image.rootfs.") {
+			return false
+		}
+	}
+	return true
 }
 
 // manifestBlobKey returns the blob-store identifier for a manifest's

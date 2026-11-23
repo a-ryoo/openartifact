@@ -313,10 +313,7 @@ func TestIngestThenRead(t *testing.T) {
 			blobs, reports := newFakeBlobs(), &fakeReports{}
 			sha := blobs.add(tt.content)
 
-			var scanned []string
-
-			ing := NewIngestor(reports, fakeLocker{}, blobs, testLog(t)).
-				OnIngested(func(_ context.Context, repoID, digest string) { scanned = append(scanned, repoID+"/"+digest) })
+			ing := NewIngestor(reports, fakeLocker{}, blobs, testLog(t))
 
 			err := ing.Handle(t.Context(), Push{RepoID: "r1", RepoName: "img", Tag: tt.tag, Manifest: manifestOf(tt.mediaType, sha)})
 			if err != nil {
@@ -331,10 +328,6 @@ func TestIngestThenRead(t *testing.T) {
 			}
 
 			if tt.want == nil {
-				if len(scanned) != 0 {
-					t.Errorf("scan started for an image without SBOM: %v", scanned)
-				}
-
 				return
 			}
 
@@ -350,10 +343,6 @@ func TestIngestThenRead(t *testing.T) {
 
 			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
 				t.Errorf("components = %v, want %v", got, tt.want)
-			}
-
-			if len(scanned) != 1 || scanned[0] != "r1/"+subject {
-				t.Errorf("onIngested = %v", scanned)
 			}
 		})
 	}

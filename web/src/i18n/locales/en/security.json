@@ -100,6 +100,8 @@
   "security.vuln.finding.cvss": "CVSS",
   "security.vuln.finding.fixedIn": "Fixed in",
   "security.vuln.finding.summary": "Summary",
+  "security.vuln.finding.aliases": "Related advisories",
+  "security.vuln.finding.advisory": "Source advisory",
   "security.vuln.rowAction": "{action}: {name}",
   "security.vuln.selectEcosystem": "Ecosystem",
   "security.vuln.ecosystemHint": "Filled from the package format; change only if the scanner expects another ecosystem.",

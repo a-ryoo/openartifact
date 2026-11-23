@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Repositories API
 
-76 endpoints. Request and response schemas are described on the [schemas page](schemas.md); the other tags are listed in the [API index](README.md).
+78 endpoints. Request and response schemas are described on the [schemas page](schemas.md); the other tags are listed in the [API index](README.md).
 
 ## Endpoints
 
@@ -1196,6 +1196,8 @@ List SBOM reports for a repository
 | Name | In | Type | Required | Description |
 |---|---|---|---|---|
 | `name` | path | string | yes | - |
+| `package_name` | query | string | no | Use with version to select SBOM reports of a hosted Docker tag. |
+| `version` | query | string | no | The Docker tag when package_name is set. |
 
 **Responses**
 
@@ -1744,6 +1746,56 @@ Mark the peer's decision as dismissed; it returns to pending only when the peer 
 | `400` | Invalid request, including a NUL byte in the URL or the body | `application/json`: [Error](schemas.md#error) |
 | `403` | Forbidden | `application/json`: [Error](schemas.md#error) |
 | `404` | Repository or VEX suggestion not found (a suggestion of another repository is not found) | `application/json`: [Error](schemas.md#error) |
+
+### `GET /api/v1/repositories/{name}/vuln/oci-scans`
+
+List automatic OCI scan states
+
+List the platform scans of one hosted Docker tag. Requires an administrator.
+
+**Parameters**
+
+| Name | In | Type | Required | Description |
+|---|---|---|---|---|
+| `name` | path | string | yes | Hosted Docker repository name. |
+| `package_name` | query | string | yes | Repository-qualified image name. |
+| `version` | query | string | yes | Image tag. |
+
+**Responses**
+
+| Status | Description | Body |
+|---|---|---|
+| `200` | Platform scan states and the latest successful report IDs. | `application/json`: object |
+| `400` | Invalid tag selection. | - |
+| `403` | Administrator access required. | - |
+
+Fields of the `200` response (`application/json`):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `scans` | array of [OCIScanState](schemas.md#ociscanstate) | no | - |
+
+### `POST /api/v1/repositories/{name}/vuln/oci-scans/{digest}/retry`
+
+Retry a failed automatic OCI scan
+
+Make a failed image scan eligible for processing. Requires an administrator.
+
+**Parameters**
+
+| Name | In | Type | Required | Description |
+|---|---|---|---|---|
+| `name` | path | string | yes | Hosted Docker repository name. |
+| `digest` | path | string | yes | Platform manifest digest. |
+
+**Responses**
+
+| Status | Description | Body |
+|---|---|---|
+| `202` | Queued. | - |
+| `400` | Invalid digest or repository. | - |
+| `403` | Administrator access required. | - |
+| `409` | No failed attempt eligible to retry. | - |
 
 ### `POST /api/v1/repositories/{name}/vuln/scan`
 

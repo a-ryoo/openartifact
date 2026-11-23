@@ -132,7 +132,15 @@ A stored scan does not keep the release it ran against. Reports and exports name
 
 ### Container images
 
-A docker repository is scanned from the SBOM its image was pushed with, not from a package name: see [container image SBOMs](sbom.md#container-image-sboms) for how an SBOM is ingested. When an SBOM arrives, OpenArtifact starts a scan of the image with `osv`. You can also start one yourself, with an admin:
+When you push an image to a hosted Docker repository, OpenArtifact queues a Trivy scan for each platform manifest digest. It uses an [attached SBOM](sbom.md#container-image-sboms) as soon as one is available. After five minutes without an attachment, OpenArtifact generates a CycloneDX SBOM from the stored image and scans that document. Reusing the same digest under a different tag reuses the report. The push completes while this work runs in the background.
+
+Open the image version's **Security** tab to see the state of each platform. An administrator can retry failed scans there. The tab keeps the last successful report after a failed rescan and shows its scan time and database date. After two successful scans it also lists the added and removed package advisories. Select an advisory ID to see its description, package and versions, severity, CVSS and source when Trivy supplies them.
+
+The worker checks for a newer Trivy vulnerability database every six hours by default. A new published revision queues each tagged platform digest with a saved SBOM once. The worker rescans that SBOM, so the image need not be rebuilt or published again.
+
+Enable [Trivy](scanner-setup.md) on the worker. The worker needs temporary storage for the compressed image layers. Local generation supports up to 8 GiB per image and needs the referenced blobs in the registry.
+
+To run a manual per-package scan as an admin:
 
 ```sh
 curl -sS -X POST -H 'Authorization: Bearer <TOKEN>' -H 'Content-Type: application/json' \
@@ -140,7 +148,7 @@ curl -sS -X POST -H 'Authorization: Bearer <TOKEN>' -H 'Content-Type: applicatio
   -d '{"ecosystem":"docker","artifact_id":"sha256:<manifest digest>","scanners":["osv"]}'
 ```
 
-`artifact_id` is the manifest digest, which is also what [quarantine](#quarantine) blocks. `package_name` and `package_version` are not used. An image without an ingested SBOM answers `422 no_sbom`. The scan looks up every package of the SBOM once, like a scan of one package, and stores the findings with the affected `package` (`name@version`). It ends as any other scan does: the result is stored, webhook events fire (`scan.completed`, `vulnerability.found`) and the scan hook runs.
+`artifact_id` is the manifest digest, which is also what [quarantine](#quarantine) blocks. `package_name` and `package_version` are not used. An image without a stored SBOM answers `422 no_sbom`. The scan looks up every package of the SBOM once, like a scan of one package, and stores the findings with the affected `package` (`name@version`). It ends as any other scan does: the result is stored, webhook events fire (`scan.completed`, `vulnerability.found`) and the scan hook runs.
 
 Each Package URL type of the SBOM is mapped to an ecosystem:
 
