@@ -36,7 +36,7 @@ env:
 jobs:
   lint:
     name: Validate catalog
-    runs-on: ubuntu-latest
+    runs-on: &runner [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,7 +55,7 @@ jobs:
     name: Publish image and catalog bundles
     if: github.event_name != 'pull_request'
     needs: lint
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 45
     permissions:
       contents: read
@@ -108,7 +108,8 @@ jobs:
           curl -fsSL -o tkn.tgz "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz"
           echo "${TKN_SHA256}  tkn.tgz" | sha256sum -c -
           tar -xzf tkn.tgz tkn
-          sudo install tkn /usr/local/bin/tkn
+          install -m 0755 tkn "$RUNNER_TEMP/tkn"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Push and sign one bundle per catalog resource
         env:
           VERSION: ${{ steps.version.outputs.version }}

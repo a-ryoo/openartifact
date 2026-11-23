@@ -30,7 +30,7 @@ permissions:
 jobs:
   batch:
     name: batch fuzzing
-    runs-on: ubuntu-latest
+    runs-on: &runner [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 120
     permissions:
       contents: read
@@ -87,7 +87,7 @@ jobs:
     name: corpus pruning
     needs: batch
     if: ${{ !cancelled() }} # a crash found by the batch run must not skip pruning
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 180
     permissions:
       contents: read
@@ -152,7 +152,7 @@ jobs:
     name: coverage report
     needs: prune
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 90
     permissions:
       contents: read
@@ -203,7 +203,7 @@ jobs:
     name: tracking issue
     needs: [batch, prune, coverage]
     if: ${{ always() && github.event_name == 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 10
     permissions:
       contents: read

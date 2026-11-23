@@ -24,7 +24,7 @@ jobs:
   comment:
     name: comment coverage on pull request
     if: ${{ github.event.workflow_run.event == 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 10
     permissions:
       contents: read # check out the default branch (scripts/coverage/render.sh)

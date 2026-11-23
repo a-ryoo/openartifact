@@ -40,7 +40,7 @@ env:
 jobs:
   image:
     name: build image
-    runs-on: ubuntu-latest
+    runs-on: &runner [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 30
     outputs:
       formats: ${{ steps.formats.outputs.formats }}
@@ -93,7 +93,7 @@ jobs:
   smoke:
     name: smoke (${{ matrix.format }})
     needs: image
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -137,7 +137,7 @@ jobs:
     needs: [image, smoke]
     # Skipped when the run was cancelled; an image build failure skips the matrix, which counts as a failing night.
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 5
     permissions:
       contents: read

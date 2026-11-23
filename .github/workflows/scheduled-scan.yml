@@ -25,7 +25,7 @@ env:
 jobs:
   targets:
     name: resolve image tags
-    runs-on: ubuntu-latest
+    runs-on: &runner [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.resolve.outputs.matrix }}
@@ -49,7 +49,7 @@ jobs:
   scan:
     name: scan (${{ matrix.tag }})
     needs: targets
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 20
     permissions:
       contents: read

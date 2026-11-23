@@ -35,7 +35,7 @@ env:
 jobs:
   api-fuzz:
     name: api-fuzz
-    runs-on: ubuntu-latest
+    runs-on: &runner [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 45
     env:
       # pr: small fixed-seed budget; everything else: the nightly budget.
@@ -47,7 +47,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: openartifact_test
-        ports: ["5432:5432"]
+        ports: ["127.0.0.1::5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
@@ -72,6 +72,7 @@ jobs:
         env:
           OA_BIN: ${{ runner.temp }}/oa-server
           OA_TESTENV_DIR: ${{ runner.temp }}/oa-testenv
+          DB_PORT: ${{ job.services.postgres.ports['5432'] }}
         run: scripts/testenv.sh start
 
       - name: Fuzz the API
@@ -109,7 +110,7 @@ jobs:
     name: tracking issue
     needs: [api-fuzz]
     if: ${{ always() && github.event_name == 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 10
     permissions:
       contents: read

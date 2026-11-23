@@ -24,7 +24,7 @@ env:
 jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 45
     permissions:
       contents: read

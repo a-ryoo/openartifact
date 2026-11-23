@@ -29,12 +29,12 @@ env:
   BUN_VERSION: "1.4.4"
   GOLANGCI_LINT_VERSION: "v2.15.0"
   TRIVY_VERSION: "v0.76.1"
-  IMAGE_TAG: openartifact:ci
+  IMAGE_TAG: openartifact:ci-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
   go:
     name: build / vet / test
-    runs-on: ubuntu-latest
+    runs-on: &runner [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,15 +100,14 @@ jobs:
   # The `integration` job below aggregates them under the required check name.
   integration-shard:
     name: integration shard (${{ matrix.shard }})
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 30
     strategy:
       fail-fast: false # every shard reports, so one failure does not hide another
       matrix:
         shard: [database, worker, tests, rest]
     env:
-      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/openartifact_test?sslmode=disable
-      TEST_S3_ENDPOINT: http://localhost:3900
+      GARAGE_NAME: oa-ci-garage-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
       TEST_S3_BUCKET: openartifact-test
       TEST_S3_REGION: garage
       # Throwaway credentials imported into the ephemeral Garage node below.
@@ -120,7 +119,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: openartifact_test
-        ports: ["5432:5432"]
+        ports: ["127.0.0.1::5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
@@ -152,7 +151,7 @@ jobs:
       # MinIO no longer publishes container images; Garage is the S3 test backend.
       - name: start Garage
         run: |
-          cat > /tmp/garage.toml <<EOF
+          cat > "$RUNNER_TEMP/garage.toml" <<EOF
           metadata_dir = "/var/lib/garage/meta"
           data_dir = "/var/lib/garage/data"
           db_engine = "sqlite"
@@ -167,21 +166,23 @@ jobs:
           [admin]
           api_bind_addr = "[::]:3903"
           EOF
-          docker run -d --name garage -p 3900:3900 \
-            -v /tmp/garage.toml:/etc/garage.toml \
+          docker run -d --name "$GARAGE_NAME" -p 127.0.0.1::3900 \
+            -v "$RUNNER_TEMP/garage.toml:/etc/garage.toml:ro" \
             docker.io/dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020
-          G="docker exec garage /garage"
-          for _ in $(seq 1 30); do $G status >/dev/null 2>&1 && break; sleep 1; done
-          NODE=$($G node id -q | cut -d@ -f1)
-          $G layout assign -z dc1 -c 1G "$NODE"
-          $G layout apply --version 1
-          $G bucket create "$TEST_S3_BUCKET"
-          $G key import --yes -n ci "$TEST_S3_ACCESS_KEY" "$TEST_S3_SECRET_KEY"
-          $G bucket allow --read --write --owner "$TEST_S3_BUCKET" --key ci
+          garage=(docker exec "$GARAGE_NAME" /garage)
+          for _ in $(seq 1 30); do "${garage[@]}" status >/dev/null 2>&1 && break; sleep 1; done
+          NODE=$("${garage[@]}" node id -q | cut -d@ -f1)
+          "${garage[@]}" layout assign -z dc1 -c 1G "$NODE"
+          "${garage[@]}" layout apply --version 1
+          "${garage[@]}" bucket create "$TEST_S3_BUCKET"
+          "${garage[@]}" key import --yes -n ci "$TEST_S3_ACCESS_KEY" "$TEST_S3_SECRET_KEY"
+          "${garage[@]}" bucket allow --read --write --owner "$TEST_S3_BUCKET" --key ci
+          echo "TEST_S3_ENDPOINT=http://$(docker port "$GARAGE_NAME" 3900/tcp)" >> "$GITHUB_ENV"
 
       - name: go test (integration tag, race)
         env:
           SHARD: ${{ matrix.shard }}
+          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/openartifact_test?sslmode=disable
         # The shard's packages: every package with an integration-tagged test file
         # belongs to exactly one shard, so a new one can't be missed.
         run: |
@@ -199,6 +200,10 @@ jobs:
           path: coverage-integration.out
           retention-days: 14
 
+      - name: Remove Garage
+        if: ${{ always() }}
+        run: docker rm -fv "$GARAGE_NAME" >/dev/null 2>&1 || true
+
   # Keeps the required check `integration (postgres + garage + testcontainers)` (the
   # name the repository ruleset requires) and the `needs: integration` of the
   # coverage job stable while the work is sharded: green only when every shard is.
@@ -206,7 +211,7 @@ jobs:
     name: integration (postgres + garage + testcontainers)
     needs: [integration-shard]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 5
     steps:
       - name: every integration shard passed
@@ -218,7 +223,7 @@ jobs:
 
   lint:
     name: golangci-lint
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -241,7 +246,7 @@ jobs:
 
   reuse:
     name: REUSE compliance
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -252,7 +257,7 @@ jobs:
 
   sqlc:
     name: sqlc generate (verify no drift)
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -283,7 +288,7 @@ jobs:
 
   web:
     name: web build
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 20
     defaults:
       run:
@@ -336,7 +341,7 @@ jobs:
     name: coverage report
     needs: [go, integration, web]
     if: ${{ !cancelled() && needs.go.result == 'success' && needs.integration.result == 'success' && needs.web.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -408,7 +413,7 @@ jobs:
 
   security:
     name: security (trivy image + repo)
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 30
     permissions:
       contents: read
@@ -575,9 +580,13 @@ jobs:
           format: table
           exit-code: "1"
 
+      - name: Remove the local scan image
+        if: ${{ always() }}
+        run: docker image rm "$IMAGE_TAG" >/dev/null 2>&1 || true
+
   workflow-lint:
     name: workflow lint (actionlint + zizmor)
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -601,7 +610,7 @@ jobs:
 
   docs:
     name: docs (generated reference + site build)
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -662,7 +671,7 @@ jobs:
   dependency-review:
     name: dependency review
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
