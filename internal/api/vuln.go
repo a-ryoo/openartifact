@@ -40,7 +40,9 @@ type VulnStore interface {
 	GetVulnScanResultByID(ctx context.Context, repoID string, id string) (*models.VulnScanResult, error)
 	IsArtifactQuarantined(ctx context.Context, repoID string, keys []string) (bool, error)
 	ListLicensePolicies(ctx context.Context, repoID string) ([]*models.LicensePolicy, error)
-	ListDockerTagVulnScanResults(ctx context.Context, repoID, packageName, version string, vulnerableOnly bool) ([]*models.VulnScanResult, error)
+	ListDockerTagVulnScanResults(
+		ctx context.Context, repoID, packageName, version string, vulnerableOnly bool,
+	) ([]*models.VulnScanResult, error)
 	ListVulnScanOverview(ctx context.Context, params models.VulnScanListParams) (*models.VulnScanOverviewPage, error)
 	ListVulnScanResults(ctx context.Context, repoID string, vulnerableOnly bool) ([]*models.VulnScanResult, error)
 	SetVulnScanQuarantine(ctx context.Context, repoID string, id string, quarantined bool) error
@@ -529,12 +531,18 @@ func (h *VulnHandler) handleListScans(w http.ResponseWriter, r *http.Request) {
 	var results []*models.VulnScanResult
 	var err error
 
-	if packageName == "" && version == "" {
+	switch {
+	case packageName == "" && version == "":
 		results, err = h.db.ListVulnScanResults(r.Context(), repo.ID, vulnerableOnly)
-	} else if packageName == "" || version == "" || repo.Format != "docker" || repo.RepoType != "hosted" {
-		writeError(w, http.StatusBadRequest, "validation_failed", "package_name and version must select a tag in a hosted Docker repository")
+	case packageName == "" || version == "" || repo.Format != "docker" || repo.RepoType != "hosted":
+		writeError(
+			w,
+			http.StatusBadRequest,
+			"validation_failed",
+			"package_name and version must select a tag in a hosted Docker repository",
+		)
 		return
-	} else {
+	default:
 		results, err = h.db.ListDockerTagVulnScanResults(r.Context(), repo.ID, packageName, version, vulnerableOnly)
 	}
 
