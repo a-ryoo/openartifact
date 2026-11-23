@@ -11,10 +11,12 @@ import (
 	"database/sql"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/openartifact/openartifact/internal/database/models"
+	"github.com/stretchr/testify/require"
 )
 
 type catalogFixture struct {
@@ -130,6 +132,76 @@ func TestCatalogArtifactSecurity(t *testing.T) {
 	if _, ok := sec[f.ids["alpha@1.0.0"]]; ok {
 		t.Fatal("an unscanned row must have no entry")
 	}
+}
+
+func TestCatalogArtifactSecurityResolvesOCITag(t *testing.T) {
+	pg := newQuotaTestDB(t, 8)
+	ctx := t.Context()
+	seed := newQuotaSeeder(t, pg, "catalog-oci", "docker")
+	manifest := func(char string, children ...string) string {
+		t.Helper()
+		digest := "sha256:" + strings.Repeat(char, 64)
+		mediaType := "application/vnd.oci.image.manifest.v1+json"
+		if len(children) != 0 {
+			mediaType = "application/vnd.oci.image.index.v1+json"
+		}
+		require.NoError(t, pg.CreateDockerManifest(ctx, &models.DockerManifest{
+			RepositoryID: seed.repo, Image: "app", Digest: digest, MediaType: mediaType,
+			BlobID: seed.blob(10), Size: 10, Refs: &models.DockerManifestRefs{Manifests: children},
+		}))
+		return digest
+	}
+	amd64, arm64, next := manifest("a"), manifest("b"), manifest("c")
+	index := manifest("e", amd64, manifest("d", amd64, arm64))
+	tag := &models.DockerTag{RepositoryID: seed.repo, Image: "app", Name: "latest", ManifestDigest: index}
+	require.NoError(t, pg.UpsertDockerTag(ctx, tag))
+
+	lastScan := time.Now().UTC().Truncate(time.Microsecond)
+	for _, result := range []*models.VulnScanResult{
+		{ArtifactID: amd64, Scanner: "trivy", ScanStatus: "completed", HighCount: 2, ScannedAt: &lastScan},
+		{ArtifactID: arm64, Scanner: models.OCIAutomaticScanner, ScanStatus: "completed", MediumCount: 3, ScannedAt: &lastScan},
+		{ArtifactID: amd64, Scanner: "grype", ScanStatus: "failed"},
+	} {
+		result.RepositoryID = seed.repo
+		require.NoError(t, pg.CreateVulnScanResult(ctx, result))
+	}
+
+	entries, err := pg.ArtifactSecurity(ctx, seed.repo, []string{tag.ID, tag.ID})
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	require.EqualValues(t, 2, entries[tag.ID].High)
+	require.EqualValues(t, 3, entries[tag.ID].Medium)
+	require.NotNil(t, entries[tag.ID].ScannedAt)
+	require.True(t, entries[tag.ID].ScannedAt.Equal(lastScan))
+	flagged, _, err := pg.ListRepoPackageRollup(ctx, models.PackageRollupOptions{
+		RepoID: seed.repo, RepoFormat: "docker", Flagged: true, Page: 1, Limit: 10,
+	})
+	require.NoError(t, err)
+	require.Len(t, flagged, 1)
+	require.Equal(t, "catalog-oci/app", flagged[0].Name)
+
+	// A second tag keeps the same reports reachable without double counting.
+	alias := &models.DockerTag{RepositoryID: seed.repo, Image: "app", Name: "alias", ManifestDigest: index}
+	require.NoError(t, pg.UpsertDockerTag(ctx, alias))
+	reconcileRepoStats(t, pg)
+	stats, err := pg.RepoCatalogStats(ctx, []string{seed.repo})
+	require.NoError(t, err)
+	require.EqualValues(t, 3, stats[seed.repo].Security.Medium)
+
+	tag.ManifestDigest = next
+	require.NoError(t, pg.UpsertDockerTag(ctx, tag))
+	entries, err = pg.ArtifactSecurity(ctx, seed.repo, []string{tag.ID})
+	require.NoError(t, err)
+	require.Empty(t, entries)
+
+	alias.ManifestDigest = next
+	require.NoError(t, pg.UpsertDockerTag(ctx, alias))
+	// Retagging schedules an immediate refresh even though the cached row is fresh.
+	reconcileRepoStats(t, pg)
+	stats, err = pg.RepoCatalogStats(ctx, []string{seed.repo})
+	require.NoError(t, err)
+	require.Zero(t, stats[seed.repo].Security.Medium)
+	require.Nil(t, stats[seed.repo].Security.ScannedAt)
 }
 
 func TestCatalogRepositoryStats(t *testing.T) {

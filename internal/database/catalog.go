@@ -199,12 +199,15 @@ func (p *CatalogStore) ArtifactSecurity(
 	}
 
 	for _, r := range rows {
-		out[r.ArtifactPath] = models.ArtifactSecurity{
-			Critical: int64(r.Critical), High: int64(r.High), Medium: int64(r.Medium), Low: int64(r.Low),
-			Secrets:     int64(r.Secrets),
+		security := models.ArtifactSecurity{
+			Critical: r.Critical, High: r.High, Medium: r.Medium, Low: r.Low,
+			Secrets:     r.Secrets,
 			Quarantined: r.Quarantined,
-			ScannedAt:   r.ScannedAt,
 		}
+		if !r.ScannedAt.Equal(noScanTime) {
+			security.ScannedAt = &r.ScannedAt
+		}
+		out[r.ArtifactPath] = security
 	}
 
 	return out, nil
