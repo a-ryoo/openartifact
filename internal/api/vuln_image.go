@@ -287,6 +287,18 @@ func (h *VulnHandler) gateVulnerabilities(
 	}
 
 	if scan == nil {
+		if h.ociScans != nil {
+			status, err := h.ociScans.GetOCIScanStatus(ctx, repo.ID, digest)
+			if err != nil {
+				return fmt.Errorf("automatic OCI scan status: %w", err)
+			}
+			switch status {
+			case "waiting_for_sbom", "queued":
+				resp.ScanStatus = "pending"
+			case "scanning", "failed":
+				resp.ScanStatus = status
+			}
+		}
 		resp.Checks = append(resp.Checks, responses.GateCheck{Name: gateCheckVuln, Detail: "the image has not been scanned"})
 		return nil
 	}

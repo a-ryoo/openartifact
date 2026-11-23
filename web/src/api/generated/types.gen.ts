@@ -2481,6 +2481,25 @@ export type ExploitAnnotation = {
     priority: ExploitPriority;
 };
 
+export type OciScanFinding = {
+    id: string;
+    package: string;
+    severity: string;
+};
+
+export type OciScanState = {
+    digest: string;
+    platform?: string;
+    status: 'waiting_for_sbom' | 'queued' | 'scanning' | 'failed' | 'completed';
+    error?: string;
+    report_id?: string;
+    database_updated_at?: string;
+    changes?: {
+        added: Array<OciScanFinding>;
+        removed: Array<OciScanFinding>;
+    };
+};
+
 /**
  * One vulnerability finding of a scan with its ExploitAnnotation.
  */
@@ -6967,6 +6986,87 @@ export type GetApiV1RepositoriesByNameVulnScannersResponses = {
 };
 
 export type GetApiV1RepositoriesByNameVulnScannersResponse = GetApiV1RepositoriesByNameVulnScannersResponses[keyof GetApiV1RepositoriesByNameVulnScannersResponses];
+
+export type GetApiV1RepositoriesByNameVulnOciScansData = {
+    body?: never;
+    path: {
+        /**
+         * Hosted Docker repository name.
+         */
+        name: string;
+    };
+    query: {
+        /**
+         * Repository-qualified image name.
+         */
+        package_name: string;
+        /**
+         * Image tag.
+         */
+        version: string;
+    };
+    url: '/api/v1/repositories/{name}/vuln/oci-scans';
+};
+
+export type GetApiV1RepositoriesByNameVulnOciScansErrors = {
+    /**
+     * Invalid tag selection.
+     */
+    400: unknown;
+    /**
+     * Administrator access required.
+     */
+    403: unknown;
+};
+
+export type GetApiV1RepositoriesByNameVulnOciScansResponses = {
+    /**
+     * Platform scan states and the latest successful report IDs.
+     */
+    200: {
+        scans?: Array<OciScanState>;
+    };
+};
+
+export type GetApiV1RepositoriesByNameVulnOciScansResponse = GetApiV1RepositoriesByNameVulnOciScansResponses[keyof GetApiV1RepositoriesByNameVulnOciScansResponses];
+
+export type PostApiV1RepositoriesByNameVulnOciScansByDigestRetryData = {
+    body?: never;
+    path: {
+        /**
+         * Hosted Docker repository name.
+         */
+        name: string;
+        /**
+         * Platform manifest digest.
+         */
+        digest: string;
+    };
+    query?: never;
+    url: '/api/v1/repositories/{name}/vuln/oci-scans/{digest}/retry';
+};
+
+export type PostApiV1RepositoriesByNameVulnOciScansByDigestRetryErrors = {
+    /**
+     * Invalid digest or repository.
+     */
+    400: unknown;
+    /**
+     * Administrator access required.
+     */
+    403: unknown;
+    /**
+     * No failed attempt eligible to retry.
+     */
+    409: unknown;
+};
+
+export type PostApiV1RepositoriesByNameVulnOciScansByDigestRetryResponses = {
+    /**
+     * Queued.
+     */
+    202: unknown;
+};
 
 export type GetApiV1RepositoriesByNameVulnScansData = {
     body?: never;

@@ -1045,6 +1045,28 @@ Result of POST .../license/scan: the recorded license scan plus the policy viola
 | `verified` | boolean | yes | - |
 | `verify_error` | string | yes | Why the attachment did not verify; empty when it did |
 
+### OCIScanFinding
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | - |
+| `package` | string | yes | - |
+| `severity` | string | yes | - |
+
+### OCIScanState
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `changes` | object | no | - |
+| `changes.added` | array of [OCIScanFinding](#ociscanfinding) | yes | - |
+| `changes.removed` | array of [OCIScanFinding](#ociscanfinding) | yes | - |
+| `database_updated_at` | string (date-time) | no | - |
+| `digest` | string | yes | - |
+| `error` | string | no | - |
+| `platform` | string | no | - |
+| `report_id` | string (uuid) | no | - |
+| `status` | string | yes | One of: `waiting_for_sbom`, `queued`, `scanning`, `failed`, `completed`. |
+
 ### OIDCCondition
 
 | Field | Type | Required | Description |

@@ -112,7 +112,11 @@ func vulnOverviewWhere(params models.VulnScanListParams, args []any) (string, []
 	case "osv", "trivy", "grype":
 		// sj.scanner holds one name or several joined by ",".
 		args = append(args, params.Scanner)
-		where += fmt.Sprintf(" AND $%d = ANY(string_to_array(sj.scanner, ','))", len(args))
+		predicate := fmt.Sprintf("$%d = ANY(string_to_array(sj.scanner, ','))", len(args))
+		if params.Scanner == "trivy" {
+			predicate = fmt.Sprintf("(%s OR sj.scanner = '%s')", predicate, models.OCIAutomaticScanner)
+		}
+		where += " AND " + predicate
 	default:
 		return "", nil, fmt.Errorf("%w: scanner %q", ErrInvalidVulnScanFilter, params.Scanner)
 	}

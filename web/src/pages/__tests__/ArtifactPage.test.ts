@@ -192,10 +192,13 @@ describe('ArtifactPage', () => {
       if (pathname.endsWith('/packages')) return json({ packages: [version], total: 1 })
       if (pathname.endsWith('/packages/tag-row')) return json({ ...version, metadata: [], dependencies: [], files: [version] })
       if (pathname.endsWith('/security/summary')) return json(SUMMARY)
-      if (pathname.endsWith('/vuln/scans')) {
-        const matches = searchParams.get('package_name') === version.name && searchParams.get('version') === version.version
-        return json({ scans: matches ? scans : [] })
-      }
+      const matches = searchParams.get('package_name') === version.name && searchParams.get('version') === version.version
+      if (pathname.endsWith('/vuln/scans')) return json({ scans: matches ? scans.slice(1) : [] })
+      if (pathname.endsWith('/vuln/oci-scans')) return json({ scans: matches ? [{
+        digest: scans[0].artifact_id, platform: scans[0].platform, status: 'failed', report_id: scans[0].id,
+        error: 'scanner exited with an error', database_updated_at: '2026-02-01T00:00:00Z',
+        changes: { added: [{ id: 'CVE-2026-1234', package: 'openssl@1.2.3', severity: 'HIGH' }], removed: [] },
+      }] : [] })
       if (pathname.endsWith('/vex/statements')) return json({ statements: [] })
       const scan = scans.find((row) => pathname.endsWith(`/vuln/scans/${row.id}`))
       return scan ? json(scan) : json({}, 404)
@@ -205,6 +208,10 @@ describe('ArtifactPage', () => {
     expect(wrapper.get('[data-testid=sec-scanned]').exists()).toBe(true)
     expect(wrapper.text()).toContain('linux/amd64')
     expect(wrapper.text()).toContain('linux/arm64')
+    expect(wrapper.text()).toContain('scanner exited with an error')
+    expect(wrapper.text()).toContain('Trivy database updated')
+    expect(wrapper.text()).toContain('Added findings (1)')
+    expect(wrapper.text()).toContain('CVE-2026-1234')
     wrapper.unmount()
   })
 

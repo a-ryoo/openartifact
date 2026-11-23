@@ -45,10 +45,9 @@ func NewOCIScanWorker(db *database.PostgresDB, blobs storage.BlobStore, trivy *v
 
 // Run serves scans until the worker lifecycle ends.
 func (w *OCIScanWorker) Run(ctx context.Context, announce func(context.Context, *models.VulnScanResult)) {
+	var scheduled time.Time
 	for ctx.Err() == nil {
-		claimCtx, stop := context.WithTimeout(ctx, ociStoreTimeout)
-		job, err := w.db.ClaimOCIScan(claimCtx, time.Now().Add(ociScanLease))
-		stop()
+		job, err := w.claim(ctx, &scheduled)
 
 		if err != nil && ctx.Err() == nil {
 			w.log.Errorw("automatic OCI scan claim failed", "error", err)
@@ -63,13 +62,38 @@ func (w *OCIScanWorker) Run(ctx context.Context, announce func(context.Context, 
 	}
 }
 
+func (w *OCIScanWorker) claim(ctx context.Context, scheduled *time.Time) (*database.OCIScanJob, error) {
+	revision, err := w.trivy.TrivyDBRevision()
+	if err != nil || revision.IsZero() {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, ociStoreTimeout)
+	defer cancel()
+
+	if revision.After(*scheduled) {
+		if err := w.db.ScheduleOCIRescans(ctx, revision); err != nil {
+			return nil, err
+		}
+		*scheduled = revision
+	}
+
+	return w.db.ClaimOCIScan(ctx, time.Now().Add(ociScanLease), revision)
+}
+
 func (w *OCIScanWorker) runScan(ctx context.Context, job database.OCIScanJob, announce func(context.Context, *models.VulnScanResult)) {
 	scanCtx, cancel := context.WithTimeout(ctx, ociScanTimeout)
 	findings, err := w.scan(scanCtx, job)
 	cancel()
 
-	if ctx.Err() != nil {
-		// A replacement can reclaim this lease. Shutdown is not a scan failure.
+	storeCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), ociStoreTimeout)
+	defer stop()
+
+	if ctx.Err() != nil || errors.Is(err, vuln.ErrTrivyRevisionChanged) {
+		if err := w.db.ReleaseOCIScan(storeCtx, job); err != nil {
+			w.log.Warnw("automatic OCI scan release failed", "digest", job.Digest, "error", err)
+		}
+
 		return
 	}
 
@@ -93,15 +117,14 @@ func (w *OCIScanWorker) runScan(ctx context.Context, job database.OCIScanJob, an
 		}
 	}
 
-	storeCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), ociStoreTimeout)
-	defer stop()
-
 	if err := w.db.FinishOCIScan(storeCtx, job, result); err != nil {
 		w.log.Errorw("automatic OCI scan completion failed", "repository_id", job.RepositoryID, "digest", job.Digest, "error", err)
 		return
 	}
 
-	announce(storeCtx, result)
+	if result.ID != "" {
+		announce(storeCtx, result)
+	}
 }
 
 func (w *OCIScanWorker) scan(ctx context.Context, job database.OCIScanJob) ([]models.Vulnerability, error) {
@@ -114,7 +137,7 @@ func (w *OCIScanWorker) scan(ctx context.Context, job database.OCIScanJob) ([]mo
 		return nil, err
 	}
 
-	return w.trivy.ScanImageSBOM(ctx, body)
+	return w.trivy.ScanImageSBOM(ctx, body, job.Revision)
 }
 
 func (w *OCIScanWorker) generateSBOM(ctx context.Context, job database.OCIScanJob) ([]byte, error) {

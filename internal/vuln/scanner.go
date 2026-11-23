@@ -300,6 +300,7 @@ type trivyVulnerability struct {
 	Description      string               `json:"Description"`
 	PkgName          string               `json:"PkgName"`
 	InstalledVersion string               `json:"InstalledVersion"`
+	VendorIDs        []string             `json:"VendorIDs"`
 	PrimaryURL       string               `json:"PrimaryURL"`
 	Severity         string               `json:"Severity"`
 	CVSS             map[string]trivyCVSS `json:"CVSS"`
@@ -310,7 +311,9 @@ type trivyVulnerability struct {
 }
 
 type trivyCVSS struct {
-	V3Score float64 `json:"V3Score"`
+	V2Score  float64 `json:"V2Score"`
+	V3Score  float64 `json:"V3Score"`
+	V40Score float64 `json:"V40Score"`
 }
 
 // Scan runs trivy on a temporary manifest file.
@@ -435,15 +438,19 @@ func (s *TrivyScanner) parseTrivyOutput(data []byte) ([]models.Vulnerability, er
 }
 
 func (tv trivyVulnerability) model() models.Vulnerability {
-	var score float64
+	var score, fallback float64
 	for _, cvss := range tv.CVSS {
 		score = max(score, cvss.V3Score)
+		fallback = max(fallback, cvss.V40Score, cvss.V2Score)
+	}
+	if score == 0 {
+		score = fallback
 	}
 
 	return models.Vulnerability{
 		ID: tv.VulnerabilityID, Summary: tv.Title, Description: tv.Description,
 		FixedIn: tv.FixedVersion, PublishedAt: tv.PublishedDate, References: tv.References,
-		PrimaryURL: tv.PrimaryURL, CWEs: tv.CweIDs, CVSS: score,
+		PrimaryURL: tv.PrimaryURL, CWEs: tv.CweIDs, CVSS: score, Aliases: tv.VendorIDs,
 		Severity: mapScannerSeverity(tv.Severity, score),
 	}
 }

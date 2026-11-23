@@ -6,6 +6,7 @@ package vuln
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -259,9 +260,8 @@ func fileExists(path string) bool {
 // Trivy deletes the database directory it is about to replace, so refreshing
 // the live one would leave scans without a database for as long as the
 // download takes. The download therefore runs in a staging directory seeded
-// with hard links to the live files (Trivy still sees the current metadata and
-// skips an unneeded download) and only a finished, different database is
-// swapped in, atomically where the filesystem allows.
+// with hard links to the live files, and only a finished database is swapped
+// in, atomically where the filesystem allows.
 func (r *Registry) updateTrivyDB(ctx context.Context) error {
 	t := &r.trivy
 
@@ -280,6 +280,10 @@ func (r *Registry) updateTrivyDB(ctx context.Context) error {
 
 		for _, d := range trivyDBDirs {
 			seedStage(filepath.Join(t.cacheDir, d), filepath.Join(stage, d))
+		}
+
+		if err := expireTrivyMetadata(stage); err != nil {
+			return err
 		}
 
 		base := []string{"image", "--quiet", "--skip-version-check", "--cache-dir=" + stage}
@@ -301,6 +305,10 @@ func (r *Registry) updateTrivyDB(ctx context.Context) error {
 			}
 		}
 
+		if err := checkTrivyRevision(t.cacheDir, stage); err != nil {
+			return err
+		}
+
 		for _, d := range trivyDBDirs {
 			if err := promoteStaged(filepath.Join(stage, d), filepath.Join(t.cacheDir, d)); err != nil {
 				return fmt.Errorf("%w: %s: %w", errDBUpdateRun, t.name, err)
@@ -309,6 +317,52 @@ func (r *Registry) updateTrivyDB(ctx context.Context) error {
 
 		return nil
 	})
+}
+
+// checkTrivyRevision keeps a lagging upstream mirror from replacing the
+// cache with an older database and stranding work queued against the newer one.
+func checkTrivyRevision(live, stage string) error {
+	current, _ := trivyDBRevisionFor(live)
+	next, err := trivyDBRevisionFor(stage)
+	if err != nil {
+		return err
+	}
+	if next.Before(current) {
+		return fmt.Errorf("%w: staged Trivy revision %s is older than %s", errDBUpdateRun, next, current)
+	}
+
+	return nil
+}
+
+// expireTrivyMetadata bypasses Trivy's upstream NextUpdate for each scheduled
+// check. Removing the staging link leaves the live metadata and scan cache intact.
+// Keep Trivy's one-hour cooldown when replicas share the cache.
+func expireTrivyMetadata(stage string) error {
+	path := filepath.Join(stage, "db", "metadata.json")
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read staged Trivy database metadata: %w", err)
+	}
+
+	var metadata struct {
+		NextUpdate   time.Time `json:"NextUpdate"`   //nolint:tagliatelle // Trivy database metadata
+		DownloadedAt time.Time `json:"DownloadedAt"` //nolint:tagliatelle // Trivy database metadata
+	}
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		// Trivy already downloads again if the metadata cannot be parsed.
+		return nil //nolint:nilerr // delegate recovery to Trivy
+	}
+	now := time.Now()
+	if now.Before(metadata.NextUpdate) && !now.Before(metadata.DownloadedAt.Add(time.Hour)) {
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("expire staged Trivy database metadata: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // trivyStagingDir is where a Trivy refresh downloads, inside the cache

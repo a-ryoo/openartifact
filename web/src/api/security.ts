@@ -13,6 +13,7 @@ import type {
   LicenseScanResult,
   LicenseScanRunResult,
   OsvMirrorStatus,
+  OciScanState,
   SecurityFinding,
   SecurityFindingCounts,
   SecurityHealth,
@@ -66,6 +67,17 @@ export type VulnScan = VulnScanResult
 export async function listVulnScans(repo: string, tag?: { package_name: string; version: string }): Promise<VulnScan[]> {
   const res = await request<{ scans?: VulnScan[] }>(`${repoBase(repo)}/vuln/scans${queryString(tag ?? {})}`)
   return res.scans ?? []
+}
+
+export type { OciScanState }
+
+export async function listOCIScans(repo: string, tag: { package_name: string; version: string }): Promise<OciScanState[]> {
+  const res = await request<{ scans?: OciScanState[] }>(`${repoBase(repo)}/vuln/oci-scans${queryString(tag)}`)
+  return res.scans ?? []
+}
+
+export function retryOCIScan(repo: string, digest: string): Promise<void> {
+  return request<void>(`${repoBase(repo)}/vuln/oci-scans/${encodeURIComponent(digest)}/retry`, { method: 'POST' })
 }
 
 export type VulnSeverity = 'critical' | 'high' | 'medium' | 'low'

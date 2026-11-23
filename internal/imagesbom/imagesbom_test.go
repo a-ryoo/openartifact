@@ -344,7 +344,6 @@ func TestIngestThenRead(t *testing.T) {
 			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
 				t.Errorf("components = %v, want %v", got, tt.want)
 			}
-
 		})
 	}
 }

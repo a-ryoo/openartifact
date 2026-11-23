@@ -100,6 +100,8 @@
   "security.vuln.finding.cvss": "CVSS",
   "security.vuln.finding.fixedIn": "Naprawiona w",
   "security.vuln.finding.summary": "Podsumowanie",
+  "security.vuln.finding.aliases": "Powiązane komunikaty",
+  "security.vuln.finding.advisory": "Komunikat źródłowy",
   "security.vuln.rowAction": "{action}: {name}",
   "security.vuln.selectEcosystem": "Ekosystem",
   "security.vuln.ecosystemHint": "Wypełniany na podstawie formatu pakietu; zmień tylko wtedy, gdy skaner oczekuje innego ekosystemu.",

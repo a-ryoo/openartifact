@@ -43,8 +43,8 @@ func (a *app) attachImageSBOMs(handler *api.VulnHandler) {
 		WithImagePlatform(func(ctx context.Context, digest string) string {
 			return formatdocker.ImagePlatform(ctx, a.store.blobs, digest)
 		}).
-		WithAttestations(attestationSummaries{svc: attestation.NewService(a.log, a.db, a.store.blobs)})
-
+		WithAttestations(attestationSummaries{svc: attestation.NewService(a.log, a.db, a.store.blobs)}).
+		WithOCIScans(a.db)
 }
 
 // attestationSummaries answers the digest gate from the attestation index.

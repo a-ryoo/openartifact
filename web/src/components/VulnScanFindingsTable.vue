@@ -24,7 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       <tbody>
         <tr v-for="f in findings" :key="JSON.stringify([f.id, f.package])" class="group/row border-b border-border last:border-0 align-top" data-testid="finding-row">
           <td class="py-2 pr-3 font-mono text-xs whitespace-nowrap">
-            {{ f.id }}
+            <button type="button" class="text-left text-primary hover:underline" @click="openAdvisory(f.id, f.package)">{{ f.id }}</button>
             <div v-if="f.cve && f.cve !== f.id" class="text-muted" data-testid="finding-cve">{{ f.cve }}</div>
           </td>
           <td class="py-2 pr-3 text-xs">{{ f.severity }}</td>
@@ -52,10 +52,26 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </tbody>
     </table>
   </TableScroller>
+  <AdminDialog v-if="advisory" :open="true" :title="advisory.id" @close="advisory = null">
+    <div class="space-y-4 break-words text-sm text-foreground">
+      <p v-if="advisory.description || advisory.summary" class="whitespace-pre-wrap">{{ advisory.description || advisory.summary }}</p>
+      <dl class="grid grid-cols-2 gap-3 text-sm">
+        <div v-if="advisory.package"><dt class="text-muted">{{ t('security.common.package') }}</dt><dd class="font-mono">{{ advisory.package }}</dd></div>
+        <div><dt class="text-muted">{{ t('security.vuln.finding.severity') }}</dt><dd>{{ advisory.severity }}</dd></div>
+        <div><dt class="text-muted">{{ t('security.vuln.finding.fixedIn') }}</dt><dd class="font-mono">{{ advisory.fixed_in || '—' }}</dd></div>
+        <div><dt class="text-muted">{{ t('security.vuln.finding.cvss') }}</dt><dd>{{ advisory.cvss > 0 ? advisory.cvss : '—' }}</dd></div>
+        <div v-if="aliases.length" class="col-span-2"><dt class="text-muted">{{ t('security.vuln.finding.aliases') }}</dt><dd class="font-mono">{{ aliases.join(', ') }}</dd></div>
+      </dl>
+      <a v-if="advisoryURL" :href="advisoryURL" target="_blank" rel="noopener noreferrer" class="text-primary underline">
+        {{ t('security.vuln.finding.advisory') }}
+      </a>
+    </div>
+  </AdminDialog>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import AdminDialog from './AdminDialog.vue'
 import { CheckBadgeIcon } from '@heroicons/vue/20/solid'
 import RowActions, { type RowAction } from './ui/RowActions.vue'
 import TableScroller from './ui/TableScroller.vue'
@@ -66,6 +82,7 @@ import EpssBadge from './security/EpssBadge.vue'
 import KevBadge from './security/KevBadge.vue'
 import { vulnFindings, type VulnScan } from '../api/security'
 import type { VexRecord } from '../api/vex'
+import { safeHttpUrl } from '../lib/artifactLinks'
 import { sortVulns } from '../lib/exploitPriority'
 import { t, tp } from '../i18n'
 
@@ -85,5 +102,17 @@ function decisionActions(vulnId: string): RowAction[] {
 
 /** Most urgent first: KEV, high EPSS, then severity and CVSS. */
 const findings = computed(() => sortVulns(vulnFindings(props.scan)))
+const advisory = ref<NonNullable<VulnScan['vulnerabilities']>[number] | null>(null)
+const advisoryURL = computed(() => safeHttpUrl(advisory.value?.primary_url) ?? advisory.value?.references?.map(safeHttpUrl).find(Boolean))
+const aliases = computed(() => {
+  const finding = advisory.value
+  if (!finding) return []
+  return [...new Set([...(finding.aliases ?? []), finding.cve].filter((id) => id && id !== finding.id))]
+})
+
+function openAdvisory(id: string, pkg?: string): void {
+  advisory.value = props.scan.vulnerabilities?.find((finding) => finding.id === id && (finding.package ?? '') === (pkg ?? '')) ?? null
+}
+
 const showPackage = computed(() => findings.value.some((f) => f.package))
 </script>

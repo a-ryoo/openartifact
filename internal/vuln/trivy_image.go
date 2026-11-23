@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/openartifact/openartifact/internal/database/models"
 )
@@ -20,8 +21,41 @@ func (r *Registry) GenerateImageSBOM(ctx context.Context, layout string) ([]byte
 	return r.runTrivyImage(ctx, "image", "cyclonedx", "--input", layout, "--cache-backend", "memory")
 }
 
+// ErrTrivyRevisionChanged lets the worker release and reclaim work against
+// the new cache instead of publishing a result under the previous revision.
+var ErrTrivyRevisionChanged = errors.New("local Trivy database revision changed")
+
+// TrivyDBRevision reports the published revision of the local vulnerability DB.
+// DownloadedAt and NextUpdate can change when the same revision is checked.
+func (r *Registry) TrivyDBRevision() (time.Time, error) {
+	return trivyDBRevisionFor(r.trivy.cacheDir)
+}
+
+func trivyDBRevisionFor(cacheDir string) (time.Time, error) {
+	if !trivyDBPresent(cacheDir) {
+		return time.Time{}, nil
+	}
+
+	data, err := os.ReadFile(filepath.Join(cacheDir, "db", "metadata.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("read Trivy database metadata: %w", err)
+	}
+
+	var metadata struct {
+		UpdatedAt time.Time `json:"UpdatedAt"` //nolint:tagliatelle // Trivy database metadata
+	}
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return time.Time{}, fmt.Errorf("decode Trivy database metadata: %w", err)
+	}
+
+	return metadata.UpdatedAt.UTC().Truncate(time.Microsecond), nil
+}
+
 // ScanImageSBOM checks a whole stored CycloneDX or SPDX document with Trivy.
-func (r *Registry) ScanImageSBOM(ctx context.Context, sbom []byte) ([]models.Vulnerability, error) {
+func (r *Registry) ScanImageSBOM(ctx context.Context, sbom []byte, revision time.Time) ([]models.Vulnerability, error) {
 	dir, err := os.MkdirTemp("", "oa-trivy-sbom-")
 	if err != nil {
 		return nil, fmt.Errorf("create Trivy SBOM directory: %w", err)
@@ -34,7 +68,19 @@ func (r *Registry) ScanImageSBOM(ctx context.Context, sbom []byte) ([]models.Vul
 		return nil, fmt.Errorf("write Trivy SBOM input: %w", err)
 	}
 
-	data, err := r.runTrivyImage(ctx, "sbom", "json", "--scanners", "vuln", target)
+	var data []byte
+	err = r.trivy.withLock(ctx, func() error {
+		local, err := r.TrivyDBRevision()
+		if err != nil {
+			return err
+		}
+		if !local.Equal(revision) {
+			return ErrTrivyRevisionChanged
+		}
+
+		data, err = r.runTrivyImage(ctx, "sbom", "json", "--scanners", "vuln", target)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}

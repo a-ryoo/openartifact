@@ -146,3 +146,29 @@ type VulnScanSummary struct {
 	WithMedium   int
 	WithLow      int
 }
+
+// OCIAutomaticScanner selects the automatic result independently of manual Trivy scans.
+const OCIAutomaticScanner = "trivy:auto"
+
+// OCIScanState describes the current attempt and the latest successful report.
+type OCIScanState struct {
+	Digest            string
+	Status            string
+	Error             string
+	ReportID          string
+	DatabaseUpdatedAt *time.Time
+	Changes           *OCIFindingChanges
+}
+
+// OCIFinding identifies a package advisory in a whole-image scan.
+type OCIFinding struct {
+	ID       string `json:"id"`
+	Package  string `json:"package"`
+	Severity string `json:"severity"`
+}
+
+// OCIFindingChanges compares the two most recent successful reports.
+type OCIFindingChanges struct {
+	Added   []OCIFinding `json:"added"`
+	Removed []OCIFinding `json:"removed"`
+}

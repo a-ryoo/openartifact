@@ -745,10 +745,16 @@ type OciAttestation struct {
 }
 
 type OciScanQueue struct {
-	RepositoryID string     `db:"repository_id" json:"repository_id"`
-	Digest       string     `db:"digest" json:"digest"`
-	AvailableAt  time.Time  `db:"available_at" json:"available_at"`
-	ClaimedUntil *time.Time `db:"claimed_until" json:"claimed_until"`
+	RepositoryID      string     `db:"repository_id" json:"repository_id"`
+	Digest            string     `db:"digest" json:"digest"`
+	AvailableAt       time.Time  `db:"available_at" json:"available_at"`
+	ClaimedUntil      *time.Time `db:"claimed_until" json:"claimed_until"`
+	IsRescan          bool       `db:"is_rescan" json:"is_rescan"`
+	TargetRevision    *time.Time `db:"target_revision" json:"target_revision"`
+	ScanError         *string    `db:"scan_error" json:"scan_error"`
+	ReportID          *string    `db:"report_id" json:"report_id"`
+	DatabaseUpdatedAt *time.Time `db:"database_updated_at" json:"database_updated_at"`
+	FindingChanges    []byte     `db:"finding_changes" json:"finding_changes"`
 }
 
 // Rules exchanging a CI OIDC ID token for a short-lived token of a service account.

@@ -65,15 +65,28 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         <router-link v-if="ctx.caps.value.maintain" :to="inboxLink" class="text-primary hover:underline" data-testid="sec-inbox-link">{{ t('artifact.security.openInbox') }}</router-link>
       </p>
       <StateBlock v-else-if="error" variant="error" :title="t('artifact.security.loadFailed')" :hint="error">
-        <template #action><AppButton variant="secondary" @click="load">{{ t('ui.state.retry') }}</AppButton></template>
+        <template #action><AppButton variant="secondary" @click="load()">{{ t('ui.state.retry') }}</AppButton></template>
       </StateBlock>
       <p v-else-if="loading" class="text-sm text-muted">{{ t('common.loading') }}</p>
-      <p v-else-if="scans.length === 0" class="max-w-2xl text-sm text-muted" data-testid="sec-no-scans">{{ t('artifact.security.noScans') }}</p>
+      <p v-else-if="rows.length === 0" class="max-w-2xl text-sm text-muted" data-testid="sec-no-scans">{{ t('artifact.security.noScans') }}</p>
       <div v-else class="space-y-6">
-        <div v-for="scan in scans" :key="scan.id">
-          <h3 v-if="scans.length > 1 || scan.platform" class="mb-2 font-mono text-xs text-muted">{{ scan.platform || scan.package_name }} · {{ scan.scanner }}</h3>
-          <p v-if="scan.scan_status === 'failed' || scan.scan_status === 'partial'" role="status" class="mb-2 text-sm text-warning">{{ scan.scan_error || t('artifact.security.scanFailed') }}</p>
-          <VulnScanFindingsTable :scan="scan" :vex-by-vuln="vexByScan[scan.artifact_id] ?? new Map()" @decide="decide(scan, $event)" />
+        <div v-for="row in rows" :key="row.key">
+          <h3 v-if="row.state || rows.length > 1 || row.scan?.platform" class="mb-2 break-all font-mono text-xs text-muted">
+            {{ row.state?.platform || row.scan?.platform || row.state?.digest || row.scan?.package_name }} · {{ row.scan?.scanner ?? 'trivy' }}
+          </h3>
+          <ArtifactOCIScanState
+            v-if="row.state"
+            :state="row.state"
+            :scanned-at="row.scan?.scanned_at"
+            :retrying="retrying === row.state.digest"
+            @retry="retry(row.state.digest)"
+          />
+          <template v-if="row.scan">
+            <p v-if="!row.state && (row.scan.scan_status === 'failed' || row.scan.scan_status === 'partial')" role="status" class="mb-2 text-sm text-warning">
+              {{ row.scan.scan_error || t('artifact.security.scanFailed') }}
+            </p>
+            <VulnScanFindingsTable :scan="row.scan" :vex-by-vuln="vexByScan[row.scan.artifact_id] ?? new Map()" @decide="decide(row.scan, $event)" />
+          </template>
         </div>
       </div>
     </section>
@@ -95,18 +108,21 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
 import AppButton from '../AppButton.vue'
 import StateBlock from '../ui/StateBlock.vue'
+import ArtifactOCIScanState from './ArtifactOCIScanState.vue'
 import SeverityBadge from '../ui/SeverityBadge.vue'
 import VexDecisionDialog from '../VexDecisionDialog.vue'
 import VulnScanFindingsTable from '../VulnScanFindingsTable.vue'
-import { getVulnScan, listVulnScans, type VulnScan } from '../../api/security'
+import { getVulnScan, listOCIScans, listVulnScans, retryOCIScan, type OciScanState, type VulnScan } from '../../api/security'
 import { listVexStatements, type VexRecord } from '../../api/vex'
 import { useArtifactContext } from '../../composables/useArtifact'
 import { securityLevel } from '../../lib/artifactSecurity'
 import { formatDateTime } from '../../lib/datetime'
 import { vexByVulnId } from '../../lib/vex'
 import { t, tp, tpn } from '../../i18n'
+import { useToastStore } from '../../stores/toast'
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const
 
@@ -121,37 +137,105 @@ function scanLink(type: 'license' | 'secret') {
 const inboxLink = computed(() => ({ path: '/security', query: { repo: ctx.repoName.value, q: ctx.pkgName.value } }))
 
 const scans = ref<VulnScan[]>([])
+const ociScans = ref<OciScanState[]>([])
+const retrying = ref('')
+const toasts = useToastStore()
+const tag = computed(() => {
+  const entry = ctx.entry.value
+  if (!entry || ctx.format.value !== 'docker' || ctx.repository.value?.repo_type !== 'hosted') return undefined
+  return { package_name: ctx.pkgName.value, version: entry.version }
+})
+const rows = computed(() => {
+  const autoIds = new Set(ociScans.value.map((state) => state.report_id))
+  const byID = new Map(scans.value.map((scan) => [scan.id, scan]))
+  return [
+    ...ociScans.value.map((state) => ({ key: state.digest, state, scan: state.report_id ? byID.get(state.report_id) : undefined })),
+    ...scans.value.filter((scan) => !autoIds.has(scan.id)).map((scan) => ({ key: scan.id, scan, state: undefined })),
+  ]
+})
 const vexByScan = ref<Record<string, Map<string, VexRecord>>>({})
 const loading = ref(false)
 const error = ref('')
 const deciding = ref<{ scan: VulnScan; vulnId: string } | null>(null)
 
 let generation = 0
-async function load(): Promise<void> {
+async function load(quiet = false): Promise<void> {
   const mine = ++generation
-  scans.value = []
-  vexByScan.value = {}
+  if (!quiet) {
+    scans.value = []
+    ociScans.value = []
+    vexByScan.value = {}
+  }
   error.value = ''
   const entry = ctx.entry.value
   if (!ctx.caps.value.admin || !entry) return
-  loading.value = true
+  loading.value = !quiet
+  const repo = ctx.repoName.value
+  const selectedTag = tag.value
   try {
-    const isDockerTag = ctx.format.value === 'docker' && ctx.repository.value?.repo_type === 'hosted'
-    const tag = isDockerTag ? { package_name: ctx.pkgName.value, version: entry.version } : undefined
-    const rows = await listVulnScans(ctx.repoName.value, tag)
-    const ids = new Set(entry.files.map((f) => f.id))
-    const listed = tag ? rows : rows.filter((s) => ids.has(s.artifact_id))
-    const [full, vex] = await Promise.all([
-      Promise.all(listed.map((s) => getVulnScan(ctx.repoName.value, s.id))),
-      Promise.all(listed.map((s) => listVexStatements(ctx.repoName.value, s.artifact_id))),
+    const [listed, states] = await Promise.all([
+      listVulnScans(repo, selectedTag),
+      selectedTag ? listOCIScans(repo, selectedTag) : [],
     ])
+    const fileIDs = new Set(entry.files.map((f) => f.id))
+    const ids = new Set(listed.filter((s) => selectedTag || fileIDs.has(s.artifact_id)).map((s) => s.id))
+    for (const state of states) {
+      if (state.report_id) ids.add(state.report_id)
+    }
+    const full = await Promise.all(Array.from(ids, (id) => getVulnScan(repo, id)))
+    const artifacts = [...new Set(full.map((scan) => scan.artifact_id))]
+    const vex = await Promise.all(artifacts.map((id) => listVexStatements(repo, id)))
     if (mine !== generation) return
     scans.value = full
-    vexByScan.value = Object.fromEntries(listed.map((s, i) => [s.artifact_id, vexByVulnId(vex[i] ?? [])]))
+    ociScans.value = states
+    vexByScan.value = Object.fromEntries(artifacts.map((id, i) => [id, vexByVulnId(vex[i] ?? [])]))
   } catch (err) {
     if (mine === generation) error.value = err instanceof Error ? err.message : String(err)
   } finally {
     if (mine === generation) loading.value = false
+  }
+}
+
+let refreshing = false
+async function refreshOCI(): Promise<void> {
+  const selectedTag = tag.value
+  if (!selectedTag || refreshing) return
+  refreshing = true
+  const mine = generation
+  try {
+    const states = await listOCIScans(ctx.repoName.value, selectedTag)
+    if (mine !== generation) return
+    const current = new Map(ociScans.value.map((state) => [state.digest, state]))
+    if (states.some((state) => {
+      const previous = current.get(state.digest)
+      return state.report_id && (state.report_id !== previous?.report_id ||
+        state.database_updated_at !== previous.database_updated_at ||
+        (state.status === 'completed' && previous.status !== 'completed'))
+    })) {
+      await load(true)
+    } else {
+      ociScans.value = states
+    }
+  } catch (err) {
+    if (mine === generation) error.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    refreshing = false
+  }
+}
+
+const running = computed(() => ociScans.value.some(({ status }) => status !== 'completed' && status !== 'failed'))
+const { pause, resume } = useIntervalFn(() => void refreshOCI(), 5000, { immediate: false })
+watch(running, (active) => active ? resume() : pause())
+
+async function retry(digest: string): Promise<void> {
+  retrying.value = digest
+  try {
+    await retryOCIScan(ctx.repoName.value, digest)
+    await refreshOCI()
+  } catch (err) {
+    toasts.error(t('artifact.security.scanFailed'), err instanceof Error ? err.message : String(err))
+  } finally {
+    retrying.value = ''
   }
 }
 
