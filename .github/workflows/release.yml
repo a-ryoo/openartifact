@@ -32,7 +32,7 @@ jobs:
   # is published until the CI workflow succeeded on exactly that commit.
   ci-gate:
     name: CI succeeded on the tagged commit
-    runs-on: ubuntu-latest
+    runs-on: &release-runner [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 90
     permissions:
       contents: read
@@ -72,7 +72,7 @@ jobs:
   verify:
     name: verify (VERSION matches tag, tests)
     needs: ci-gate
-    runs-on: ubuntu-latest
+    runs-on: *release-runner
     timeout-minutes: 30
     permissions:
       contents: read
@@ -130,7 +130,7 @@ jobs:
   binaries:
     name: binaries (GoReleaser)
     needs: [ci-gate, verify]
-    runs-on: ubuntu-latest
+    runs-on: *release-runner
     timeout-minutes: 30
     permissions:
       contents: write # create the GitHub release and upload archives
@@ -188,7 +188,7 @@ jobs:
   image:
     name: container image
     needs: [ci-gate, verify]
-    runs-on: ubuntu-latest
+    runs-on: *release-runner
     timeout-minutes: 60
     permissions:
       contents: read # checkout
@@ -196,10 +196,8 @@ jobs:
       id-token: write # keyless cosign signing + provenance attestation
       attestations: write # store the build-provenance attestation
     env:
-      LOCAL_TAG: openartifact:release-scan
-      LOCAL_TAG_ARM64: openartifact:release-scan-arm64
-      BUILDX_CACHE: /tmp/buildx-cache
-      BUILDX_CACHE_ARM64: /tmp/buildx-cache-arm64
+      LOCAL_TAG: openartifact:release-scan-${{ github.run_id }}-${{ github.run_attempt }}
+      LOCAL_TAG_ARM64: openartifact:release-scan-arm64-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -211,6 +209,8 @@ jobs:
         run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -280,7 +280,7 @@ jobs:
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}
             BUILD_TIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-          cache-to: type=local,dest=${{ env.BUILDX_CACHE }},mode=max
+          cache-to: type=local,dest=${{ runner.temp }}/buildx-cache,mode=max
 
       - name: Trivy gate (fail on fixable HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -310,7 +310,7 @@ jobs:
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}
             BUILD_TIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-          cache-to: type=local,dest=${{ env.BUILDX_CACHE_ARM64 }},mode=max
+          cache-to: type=local,dest=${{ runner.temp }}/buildx-cache-arm64,mode=max
 
       - name: Trivy gate, arm64 (fail on fixable HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -341,8 +341,8 @@ jobs:
           provenance: mode=max
           sbom: true
           cache-from: |
-            type=local,src=${{ env.BUILDX_CACHE }}
-            type=local,src=${{ env.BUILDX_CACHE_ARM64 }}
+            type=local,src=${{ runner.temp }}/buildx-cache
+            type=local,src=${{ runner.temp }}/buildx-cache-arm64
 
       - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
@@ -357,3 +357,7 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+      - name: Remove local scan images
+        if: ${{ always() }}
+        run: docker image rm "$LOCAL_TAG" "$LOCAL_TAG_ARM64" 2>/dev/null || true
