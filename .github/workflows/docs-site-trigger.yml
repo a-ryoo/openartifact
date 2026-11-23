@@ -31,7 +31,7 @@ concurrency:
 jobs:
   trigger:
     name: rebuild openartifact.github.io
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 5
     steps:
       - name: Push the trigger commit
@@ -45,6 +45,7 @@ jobs:
             exit 0
           fi
           umask 077
+          trap 'rm -f "$RUNNER_TEMP/site_key"' EXIT
           printf '%s\n' "$SITE_DEPLOY_KEY" > "$RUNNER_TEMP/site_key"
           # GitHub's published SSH host key (https://api.github.com/meta), pinned.
           printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$RUNNER_TEMP/known_hosts"
@@ -66,4 +67,3 @@ jobs:
           git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
             commit --quiet -m "rebuild: openartifact/openartifact@${SOURCE_SHA:0:7} ($SOURCE_REF)"
           git push --force --quiet origin rebuild
-          rm -f "$RUNNER_TEMP/site_key"

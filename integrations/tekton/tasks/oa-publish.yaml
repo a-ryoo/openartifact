@@ -70,7 +70,7 @@ spec:
       description: PEM bundle trusted for the OpenArtifact server.
     - name: IMAGE
       type: string
-      default: ghcr.io/a-ryoo/oa-tekton:0.26.0
+      default: ghcr.io/a-ryoo/oa-tekton:0.26.1
   results:
     - name: ARTIFACT_OUTPUTS
       description: JSON document of the uploaded files.

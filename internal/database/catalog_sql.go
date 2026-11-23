@@ -43,8 +43,23 @@ func FlaggedArtifactPredicate(repoExpr, idExpr string) string {
 // Where one repository is read this beats FlaggedArtifactPredicate: the scan
 // tables are walked once instead of probed per package row.
 func flaggedArtifactIDs(repoParam string) string {
-	return fmt.Sprintf(`SELECT fr.artifact_path FROM artifact_refs fr, %s WHERE fr.repository_id = %s AND %s`,
-		flaggedScanFrom, repoParam, flaggedScanWhere)
+	return fmt.Sprintf(`SELECT fr.artifact_path FROM artifact_refs fr, %[1]s WHERE fr.repository_id = %[2]s AND %[3]s
+	UNION
+	SELECT tag.id::text FROM (
+		SELECT ref.artifact_path FROM artifact_refs ref
+		JOIN repositories r ON r.id = ref.repository_id AND r.format = 'docker' AND r.repo_type = 'hosted'
+		CROSS JOIN LATERAL (
+			SELECT vr.critical_count, vr.high_count, vr.quarantined
+			FROM scan_jobs sj JOIN vuln_results vr ON vr.scan_job_id = sj.id
+			WHERE sj.artifact_ref_id = ref.id AND sj.scan_type = 'vuln' AND sj.status IN ('completed', 'partial')
+			ORDER BY sj.completed_at DESC NULLS LAST, sj.created_at DESC, sj.id LIMIT 1
+		) v
+		WHERE ref.repository_id = %[2]s AND ref.artifact_path LIKE 'sha256:%%'
+		  AND (v.critical_count + v.high_count > 0 OR v.quarantined)
+	) flagged
+	CROSS JOIN LATERAL docker_manifest_tags(%[2]s, flagged.artifact_path) live
+	JOIN docker_tags tag ON tag.repository_id = %[2]s AND tag.image = live.image
+	    AND tag.name = live.tag AND tag.deleted_at IS NULL`, flaggedScanFrom, repoParam, flaggedScanWhere)
 }
 
 // rollupSizesQuery is the second stage of the rollup: every row (file) of the

@@ -44,7 +44,7 @@ permissions:
 jobs:
   fuzz:
     name: fuzz (code change)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, openartifact-release]
     timeout-minutes: 30 # worst case: FUZZ_MAX_TARGETS targets, a few minutes to build, 5 to fuzz
     env:
       # Upper bound of targets built and fuzzed (select-targets.sh); 0 = no limit.

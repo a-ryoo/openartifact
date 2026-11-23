@@ -11,20 +11,37 @@ import (
 )
 
 const artifactSecurityByPath = `-- name: ArtifactSecurityByPath :many
-SELECT ref.artifact_path::text AS artifact_path,
-       COALESCE(v.critical_count, 0)::int AS critical,
-       COALESCE(v.high_count, 0)::int AS high,
-       COALESCE(v.medium_count, 0)::int AS medium,
-       COALESCE(v.low_count, 0)::int AS low,
-       COALESCE(s.finding_count, 0)::int AS secrets,
-       (COALESCE(v.quarantined, false) OR COALESCE(s.quarantined, false) OR COALESCE(l.quarantined, false))::boolean AS quarantined,
-       sc.scanned_at AS scanned_at
-FROM artifact_refs ref
+WITH requested AS (
+    SELECT DISTINCT unnest($2::text[]) AS row_id
+), paths AS (
+    SELECT row_id, row_id AS artifact_id, false AS oci_manifest FROM requested
+    UNION ALL
+    SELECT q.row_id, manifest.artifact_id, true
+    FROM requested q
+    JOIN docker_tags tag ON tag.repository_id = $1::uuid AND tag.deleted_at IS NULL
+      AND tag.id = CASE WHEN q.row_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' THEN q.row_id::uuid END
+    JOIN repositories r ON r.id = tag.repository_id AND r.format = 'docker' AND r.repo_type = 'hosted'
+    CROSS JOIN LATERAL docker_tag_artifacts(tag.repository_id,
+        CASE WHEN tag.image = '' THEN r.name ELSE r.name || '/' || tag.image END, tag.name) manifest
+    WHERE manifest.artifact_id <> q.row_id
+)
+SELECT p.row_id::text AS artifact_path,
+       COALESCE(SUM(v.critical_count), 0)::bigint AS critical,
+       COALESCE(SUM(v.high_count), 0)::bigint AS high,
+       COALESCE(SUM(v.medium_count), 0)::bigint AS medium,
+       COALESCE(SUM(v.low_count), 0)::bigint AS low,
+       COALESCE(SUM(s.finding_count), 0)::bigint AS secrets,
+       BOOL_OR(COALESCE(v.quarantined, false) OR COALESCE(s.quarantined, false) OR COALESCE(l.quarantined, false))::boolean AS quarantined,
+       COALESCE(MAX(sc.scanned_at), 'epoch'::timestamptz)::timestamptz AS scanned_at
+FROM paths p
+JOIN artifact_refs ref ON ref.repository_id = $1::uuid AND ref.artifact_path = p.artifact_id
 LEFT JOIN LATERAL (
     SELECT vr.critical_count, vr.high_count, vr.medium_count, vr.low_count, vr.quarantined
     FROM scan_jobs sj JOIN vuln_results vr ON vr.scan_job_id = sj.id
     WHERE sj.artifact_ref_id = ref.id AND sj.scan_type = 'vuln'
-    ORDER BY sj.created_at DESC LIMIT 1
+      AND (NOT p.oci_manifest OR sj.status IN ('completed', 'partial'))
+    ORDER BY CASE WHEN p.oci_manifest THEN sj.completed_at END DESC NULLS LAST,
+             sj.created_at DESC, sj.id LIMIT 1
 ) v ON true
 LEFT JOIN LATERAL (
     SELECT sr.finding_count, sr.quarantined
@@ -47,8 +64,7 @@ LEFT JOIN LATERAL (
       AND sj.completed_at IS NOT NULL
     ORDER BY sj.completed_at DESC LIMIT 1
 ) sc ON true
-WHERE ref.repository_id = $1::uuid
-  AND ref.artifact_path = ANY($2::text[])
+GROUP BY p.row_id
 `
 
 type ArtifactSecurityByPathParams struct {
@@ -57,18 +73,18 @@ type ArtifactSecurityByPathParams struct {
 }
 
 type ArtifactSecurityByPathRow struct {
-	ArtifactPath string     `db:"artifact_path" json:"artifact_path"`
-	Critical     int32      `db:"critical" json:"critical"`
-	High         int32      `db:"high" json:"high"`
-	Medium       int32      `db:"medium" json:"medium"`
-	Low          int32      `db:"low" json:"low"`
-	Secrets      int32      `db:"secrets" json:"secrets"`
-	Quarantined  bool       `db:"quarantined" json:"quarantined"`
-	ScannedAt    *time.Time `db:"scanned_at" json:"scanned_at"`
+	ArtifactPath string    `db:"artifact_path" json:"artifact_path"`
+	Critical     int64     `db:"critical" json:"critical"`
+	High         int64     `db:"high" json:"high"`
+	Medium       int64     `db:"medium" json:"medium"`
+	Low          int64     `db:"low" json:"low"`
+	Secrets      int64     `db:"secrets" json:"secrets"`
+	Quarantined  bool      `db:"quarantined" json:"quarantined"`
+	ScannedAt    time.Time `db:"scanned_at" json:"scanned_at"`
 }
 
-// The scan state of the artifacts of one repository, by artifact_refs.artifact_path
-// (the package row id). Artifacts never scanned have no row.
+// The scan state of the requested catalog rows. For an OCI tag, include the
+// reports of the manifests it currently points to as well as older tag-row reports.
 func (q *Queries) ArtifactSecurityByPath(ctx context.Context, arg ArtifactSecurityByPathParams) ([]ArtifactSecurityByPathRow, error) {
 	rows, err := q.db.Query(ctx, artifactSecurityByPath, arg.RepoID, arg.ArtifactPaths)
 	if err != nil {
@@ -173,12 +189,17 @@ func (q *Queries) RepoCatalogStats(ctx context.Context, repoIds []string) ([]Rep
 
 const repoSecurityCounts = `-- name: RepoSecurityCounts :many
 
-WITH latest AS (
-    SELECT ref.repository_id, sj.id AS job_id, sj.scan_type
+WITH current_jobs AS (
+    SELECT ref.repository_id, sj.id AS job_id, sj.scan_type, sj.is_latest, sj.status, sj.completed_at
     FROM artifact_refs ref
-    JOIN scan_jobs sj ON sj.artifact_ref_id = ref.id AND sj.is_latest
+    JOIN repositories r ON r.id = ref.repository_id
+    JOIN scan_jobs sj ON sj.artifact_ref_id = ref.id
     WHERE ref.repository_id = ANY($1::uuid[])
       AND sj.scan_type IN ('vuln', 'secret', 'license')
+      AND (NOT (r.format = 'docker' AND r.repo_type = 'hosted' AND sj.scan_type = 'vuln' AND ref.artifact_path LIKE 'sha256:%')
+           OR EXISTS (SELECT 1 FROM docker_manifest_tags(ref.repository_id, ref.artifact_path)))
+), latest AS (
+    SELECT repository_id, job_id, scan_type FROM current_jobs WHERE is_latest
 ), vuln_agg AS (
     SELECT l.repository_id,
            SUM(vr.critical_count)::bigint AS critical, SUM(vr.high_count)::bigint AS high,
@@ -204,14 +225,10 @@ WITH latest AS (
     WHERE l.scan_type = 'license'
     GROUP BY l.repository_id
 ), scanned AS (
-    SELECT ref.repository_id, MAX(sj.completed_at)::timestamptz AS scanned_at
-    FROM artifact_refs ref
-    JOIN scan_jobs sj ON sj.artifact_ref_id = ref.id
-    WHERE ref.repository_id = ANY($1::uuid[])
-      AND sj.scan_type IN ('vuln', 'secret', 'license')
-      AND sj.status IN ('completed', 'partial')
-      AND sj.completed_at IS NOT NULL
-    GROUP BY ref.repository_id
+    SELECT repository_id, MAX(completed_at)::timestamptz AS scanned_at
+    FROM current_jobs
+    WHERE status IN ('completed', 'partial') AND completed_at IS NOT NULL
+    GROUP BY repository_id
 )
 SELECT r.id::uuid AS repository_id,
        COALESCE(v.critical, 0)::bigint AS critical,
@@ -256,8 +273,8 @@ type RepoSecurityCountsRow struct {
 // quarantined result of any type; the same rule, as a predicate, is
 // FlaggedArtifactPredicate in internal/database/catalog_sql.go.
 // One row per requested repository (all zero for one never scanned): the scan
-// figures the repo stats worker stores in repo_stats. The list endpoint never
-// runs it. Only the latest job of each type counts (scan_jobs.is_latest).
+// figures the repo stats worker stores in repo_stats. For digest-based OCI
+// vulnerability reports, only manifests reachable from a live tag count.
 func (q *Queries) RepoSecurityCounts(ctx context.Context, repoIds []string) ([]RepoSecurityCountsRow, error) {
 	rows, err := q.db.Query(ctx, repoSecurityCounts, repoIds)
 	if err != nil {
