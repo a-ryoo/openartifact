@@ -99,7 +99,9 @@ func (p *SBOMStore) querySBOMReports(
 		LEFT JOIN blobs b ON b.id = sr.blob_id
 		WHERE sj.scan_type = 'sbom' AND ref.repository_id = $1 AND ($2 = '' OR ref.artifact_path = $2)
 		AND ($3 = '' OR ref.artifact_path IN (SELECT artifact_id FROM docker_tag_artifacts($1, $3, $4)))
-		ORDER BY CASE WHEN $2 <> '' THEN sr.generated_from_image ELSE false END, sj.created_at DESC, sr.id`, repoID, artifactID, packageName, version)
+		ORDER BY CASE WHEN $2 <> '' THEN sr.generated_from_image ELSE false END, sj.created_at DESC, sr.id`,
+		repoID, artifactID, packageName, version,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to %s: %w", what, err)
 	}
