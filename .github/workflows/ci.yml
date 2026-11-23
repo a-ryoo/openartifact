@@ -145,8 +145,10 @@ jobs:
         run: |
           docker exec "$PG_CONTAINER" psql -U postgres -c "ALTER SYSTEM SET max_connections = 500"
           docker restart "$PG_CONTAINER"
-          for _ in $(seq 1 30); do docker exec "$PG_CONTAINER" pg_isready -U postgres && break; sleep 1; done
+          for _ in $(seq 1 30); do docker exec "$PG_CONTAINER" pg_isready -h 127.0.0.1 -U postgres && break; sleep 1; done
           docker exec "$PG_CONTAINER" psql -U postgres -Atc "SHOW max_connections"
+          # Docker may assign a different host port when the container restarts.
+          echo "TEST_DATABASE_URL=postgres://postgres:postgres@$(docker port "$PG_CONTAINER" 5432/tcp)/openartifact_test?sslmode=disable" >> "$GITHUB_ENV"
 
       # MinIO no longer publishes container images; Garage is the S3 test backend.
       - name: start Garage
@@ -182,7 +184,6 @@ jobs:
       - name: go test (integration tag, race)
         env:
           SHARD: ${{ matrix.shard }}
-          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/openartifact_test?sslmode=disable
         # The shard's packages: every package with an integration-tagged test file
         # belongs to exactly one shard, so a new one can't be missed.
         run: |
