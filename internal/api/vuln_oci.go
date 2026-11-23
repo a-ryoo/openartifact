@@ -7,6 +7,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/openartifact/openartifact/internal/database/models"
 	"github.com/openartifact/openartifact/internal/urlparams"
@@ -86,7 +87,12 @@ func (h *VulnHandler) handleRetryOCIScan(w http.ResponseWriter, r *http.Request)
 	}
 
 	digest := urlparams.Vars(r)["digest"]
-	if !h.hasOCIScans(repo) || !imageDigestRe.MatchString(digest) {
+	var decodeErr error
+	// chi leaves route parameters escaped when it matches RawPath.
+	if r.URL.RawPath != "" {
+		digest, decodeErr = url.PathUnescape(digest)
+	}
+	if decodeErr != nil || !h.hasOCIScans(repo) || !imageDigestRe.MatchString(digest) {
 		writeError(w, http.StatusBadRequest, "validation_failed", "retry needs a manifest digest in a hosted Docker repository")
 		return
 	}
