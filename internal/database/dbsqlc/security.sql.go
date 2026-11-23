@@ -271,9 +271,18 @@ SELECT COALESCE(max(sr.scanned_at) FILTER (WHERE sr.scan_status IN ('completed',
        (count(*) FILTER (WHERE sr.kind = 'ai' AND sr.medium > 0))::bigint AS ai_review_required,
        (count(*) FILTER (WHERE sr.quarantined))::bigint AS quarantined
 FROM security_results sr
+JOIN repositories r ON r.id = sr.repository_id
 WHERE sr.repository_id = $1::uuid
-  AND ($2::text IS NULL OR sr.package_name = $2::text)
-  AND ($3::text IS NULL OR sr.package_version = $3::text)
+  AND CASE
+      WHEN sr.kind = 'vuln' AND r.format = 'docker' AND r.repo_type = 'hosted'
+           AND $2::text IS NOT NULL AND $3::text IS NOT NULL
+      THEN sr.artifact_id IN (
+          SELECT artifact_id FROM docker_tag_artifacts($1::uuid,
+              $2::text, $3::text)
+      )
+      ELSE ($2::text IS NULL OR sr.package_name = $2::text)
+           AND ($3::text IS NULL OR sr.package_version = $3::text)
+  END
 `
 
 type RepoSecuritySummaryParams struct {

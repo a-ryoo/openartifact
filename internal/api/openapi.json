@@ -13869,7 +13869,7 @@
     "/api/v1/repositories/{name}/vuln/scans": {
       "get": {
         "summary": "List vulnerability scans",
-        "description": "List vulnerability scans for a repository",
+        "description": "List vulnerability scans for a repository. Supply package_name and version together to list the latest scans of a tag and its platform manifests in a hosted Docker repository.",
         "tags": [
           "Repositories",
           "Scanning"
@@ -13879,6 +13879,22 @@
             "name": "name",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "package_name",
+            "in": "query",
+            "description": "Full Docker image name, including the repository prefix.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Docker tag to look up.",
             "schema": {
               "type": "string"
             }

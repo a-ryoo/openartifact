@@ -176,6 +176,38 @@ describe('ArtifactPage', () => {
     wrapper.unmount()
   })
 
+  it('shows both platform scans on the security tab of an OCI tag', async () => {
+    const version = { id: 'tag-row', name: 'images/tools/app', version: 'stable', format: 'docker', sha256: SHA, size: 1024 }
+    const scans = ['amd64', 'arm64'].map((arch, i) => ({
+      id: arch,
+      artifact_id: `sha256:${String(i + 1).repeat(64)}`,
+      platform: `linux/${arch}`,
+      scanner: 'osv',
+      scan_status: 'completed',
+      vulnerabilities: [],
+    }))
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const { pathname, searchParams } = new URL(String(input), 'https://oa.example')
+      if (pathname === '/api/v1/repository/images') return json({ name: 'images', format: 'docker', repo_type: 'hosted' })
+      if (pathname.endsWith('/packages')) return json({ packages: [version], total: 1 })
+      if (pathname.endsWith('/packages/tag-row')) return json({ ...version, metadata: [], dependencies: [], files: [version] })
+      if (pathname.endsWith('/security/summary')) return json(SUMMARY)
+      if (pathname.endsWith('/vuln/scans')) {
+        const matches = searchParams.get('package_name') === version.name && searchParams.get('version') === version.version
+        return json({ scans: matches ? scans : [] })
+      }
+      if (pathname.endsWith('/vex/statements')) return json({ statements: [] })
+      const scan = scans.find((row) => pathname.endsWith(`/vuln/scans/${row.id}`))
+      return scan ? json(scan) : json({}, 404)
+    })
+
+    const { wrapper } = await mountAt('/repos/images/packages/images/tools/app/versions/stable?tab=security', true)
+    expect(wrapper.get('[data-testid=sec-scanned]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('linux/amd64')
+    expect(wrapper.text()).toContain('linux/arm64')
+    wrapper.unmount()
+  })
+
   it('shows no finding count for a version nobody scanned', async () => {
     serve({ write: false, delete: false, manage: false, admin: false }, PACKAGES, { ...SUMMARY, scanned_at: null, vuln: { critical: 0, high: 0, medium: 0, low: 0 } })
     const { wrapper } = await mountAt('/repos/web/packages/@acme/widget')

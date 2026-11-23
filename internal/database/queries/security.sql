@@ -200,6 +200,15 @@ SELECT COALESCE(max(sr.scanned_at) FILTER (WHERE sr.scan_status IN ('completed',
        (count(*) FILTER (WHERE sr.kind = 'ai' AND sr.medium > 0))::bigint AS ai_review_required,
        (count(*) FILTER (WHERE sr.quarantined))::bigint AS quarantined
 FROM security_results sr
+JOIN repositories r ON r.id = sr.repository_id
 WHERE sr.repository_id = @repository_id::uuid
-  AND (sqlc.narg('package_name')::text IS NULL OR sr.package_name = sqlc.narg('package_name')::text)
-  AND (sqlc.narg('package_version')::text IS NULL OR sr.package_version = sqlc.narg('package_version')::text);
+  AND CASE
+      WHEN sr.kind = 'vuln' AND r.format = 'docker' AND r.repo_type = 'hosted'
+           AND sqlc.narg('package_name')::text IS NOT NULL AND sqlc.narg('package_version')::text IS NOT NULL
+      THEN sr.artifact_id IN (
+          SELECT artifact_id FROM docker_tag_artifacts(@repository_id::uuid,
+              sqlc.narg('package_name')::text, sqlc.narg('package_version')::text)
+      )
+      ELSE (sqlc.narg('package_name')::text IS NULL OR sr.package_name = sqlc.narg('package_name')::text)
+           AND (sqlc.narg('package_version')::text IS NULL OR sr.package_version = sqlc.narg('package_version')::text)
+  END;

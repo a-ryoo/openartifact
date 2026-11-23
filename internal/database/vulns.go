@@ -496,6 +496,19 @@ func (p *VulnStore) UpdateVulnScanResult(ctx context.Context, result *models.Vul
 
 // ListVulnScanResults lists all vulnerability scan results for a repository.
 func (p *VulnStore) ListVulnScanResults(ctx context.Context, repoID string, vulnerableOnly bool) ([]*models.VulnScanResult, error) {
+	return p.listVulnScanResults(ctx, repoID, vulnerableOnly, "", "")
+}
+
+// ListDockerTagVulnScanResults lists the latest results for the selected tag and its live manifests.
+func (p *VulnStore) ListDockerTagVulnScanResults(
+	ctx context.Context, repoID, packageName, version string, vulnerableOnly bool,
+) ([]*models.VulnScanResult, error) {
+	return p.listVulnScanResults(ctx, repoID, vulnerableOnly, packageName, version)
+}
+
+func (p *VulnStore) listVulnScanResults(
+	ctx context.Context, repoID string, vulnerableOnly bool, packageName, version string,
+) ([]*models.VulnScanResult, error) {
 	query := `
 		SELECT ` + vulnResultColumns + `
 		FROM vuln_results vr
@@ -506,9 +519,15 @@ func (p *VulnStore) ListVulnScanResults(ctx context.Context, repoID string, vuln
 		query += ` AND vr.vuln_count > 0`
 	}
 
+	args := []any{repoID}
+	if packageName != "" && version != "" {
+		query += ` AND sj.is_latest AND ref.artifact_path IN (SELECT artifact_id FROM docker_tag_artifacts($1, $2, $3))`
+		args = append(args, packageName, version)
+	}
+
 	query += ` ORDER BY sj.created_at DESC`
 
-	rows, err := p.db.QueryContext(ctx, query, repoID)
+	rows, err := p.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list vuln scan results: %w", err)
 	}

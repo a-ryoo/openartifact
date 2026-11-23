@@ -79,6 +79,10 @@ func attestScan() *models.VulnScanResult {
 	}
 }
 
+func (d *attestDB) ListDockerTagVulnScanResults(context.Context, string, string, string, bool) ([]*models.VulnScanResult, error) {
+	return nil, nil
+}
+
 func (d *attestDB) ListVulnScanResults(context.Context, string, bool) ([]*models.VulnScanResult, error) {
 	return []*models.VulnScanResult{attestScan()}, nil
 }
