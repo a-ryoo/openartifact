@@ -1976,6 +1976,10 @@ export type SbomReport = {
     id?: string;
     repo_id?: string;
     artifact_id?: string;
+    /**
+     * OCI platform of a manifest report in a tag-scoped listing.
+     */
+    platform?: string;
     format?: string;
     spec_version?: string;
     content_type?: string;
@@ -2486,6 +2490,14 @@ export type AnnotatedVulnerability = {
      */
     id: string;
     summary: string;
+    /**
+     * Full advisory description, when supplied by the scanner.
+     */
+    description?: string;
+    /**
+     * Primary advisory link, when supplied by the scanner.
+     */
+    primary_url?: string;
     /**
      * CRITICAL, HIGH, MEDIUM, LOW or UNKNOWN.
      */
@@ -5101,7 +5113,16 @@ export type GetApiV1RepositoriesByNameSbomData = {
     path: {
         name: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Use with version to select SBOM reports of a hosted Docker tag.
+         */
+        package_name?: string;
+        /**
+         * The Docker tag when package_name is set.
+         */
+        version?: string;
+    };
     url: '/api/v1/repositories/{name}/sbom';
 };
 

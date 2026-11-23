@@ -16,10 +16,10 @@ import (
 // imageSBOMHook builds the SBOM ingest of container images and returns the
 // manifest push hook that feeds it. buildVulnScanning connects it to the scans.
 func (a *app) imageSBOMHook() formatdocker.ManifestPutHook {
-	a.feat.imageSBOM = imagesbom.NewIngestor(a.db, a.db, a.store.blobs, a.log)
+	ingestor := imagesbom.NewIngestor(a.db, a.db, a.store.blobs, a.log)
 
 	return func(ctx context.Context, ev formatdocker.ManifestEvent) {
-		err := a.feat.imageSBOM.Handle(ctx, imagesbom.Push{
+		err := ingestor.Handle(ctx, imagesbom.Push{
 			RepoID:        ev.RepoID,
 			RepoName:      ev.RepoName,
 			Image:         ev.Image,
@@ -36,7 +36,7 @@ func (a *app) imageSBOMHook() formatdocker.ManifestPutHook {
 }
 
 // attachImageSBOMs lets the vulnerability handler scan and evaluate the
-// ingested SBOMs of images, scan an image when an SBOM arrives, and report the
+// ingested SBOMs of images and report the
 // attestations of an image in the digest gate.
 func (a *app) attachImageSBOMs(handler *api.VulnHandler) {
 	handler.WithImages(imagesbom.NewReader(a.db, a.store.blobs)).
@@ -45,15 +45,6 @@ func (a *app) attachImageSBOMs(handler *api.VulnHandler) {
 		}).
 		WithAttestations(attestationSummaries{svc: attestation.NewService(a.log, a.db, a.store.blobs)})
 
-	if a.feat.imageSBOM == nil {
-		return
-	}
-
-	a.feat.imageSBOM.OnIngested(func(ctx context.Context, repoID, digest string) {
-		if err := handler.ScanImage(ctx, repoID, digest); err != nil {
-			a.log.Warnw("image scan after SBOM ingest was not started", "repository_id", repoID, "digest", digest, "error", err)
-		}
-	})
 }
 
 // attestationSummaries answers the digest gate from the attestation index.

@@ -7,14 +7,15 @@ package models
 import "time"
 
 type SBOMReport struct {
-	ID           string
-	RepositoryID string
-	ArtifactID   string
-	Format       string // "cyclonedx" or "spdx"
-	SpecVersion  string // "1.4" or "2.3"
-	ContentType  string
-	SBOMData     map[string]any // for JSON SBOMs (cyclonedx); populated by the API layer from the generator, not persisted directly
-	SBOMText     string         // for text SBOMs (spdx); ditto
+	GeneratedFromImage bool // use as fallback for an externally supplied SBOM
+	ID                 string
+	RepositoryID       string
+	ArtifactID         string
+	Format             string // "cyclonedx" or "spdx"
+	SpecVersion        string // "1.4" or "2.3"
+	ContentType        string
+	SBOMData           map[string]any // for JSON SBOMs (cyclonedx); populated by the API layer from the generator, not persisted directly
+	SBOMText           string         // for text SBOMs (spdx); ditto
 	// BlobSHA256 is the sha256 of the blob store object holding the raw SBOM bytes; "" if not (yet) persisted. Set by the
 	// caller before CreateSBOMReport; populated on reads via a JOIN with blobs.
 	BlobSHA256 string

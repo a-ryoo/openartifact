@@ -4363,6 +4363,10 @@
           "artifact_id": {
             "type": "string"
           },
+          "platform": {
+            "type": "string",
+            "description": "OCI platform of a manifest report in a tag-scoped listing."
+          },
           "format": {
             "type": "string"
           },
@@ -5556,6 +5560,14 @@
               },
               "summary": {
                 "type": "string"
+              },
+              "description": {
+                "type": "string",
+                "description": "Full advisory description, when supplied by the scanner."
+              },
+              "primary_url": {
+                "type": "string",
+                "description": "Primary advisory link, when supplied by the scanner."
               },
               "severity": {
                 "type": "string",
@@ -10556,6 +10568,22 @@
             "name": "name",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "package_name",
+            "in": "query",
+            "description": "Use with version to select SBOM reports of a hosted Docker tag.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "The Docker tag when package_name is set.",
             "schema": {
               "type": "string"
             }

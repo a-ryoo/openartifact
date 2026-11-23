@@ -88,7 +88,7 @@ A dependency whose manifest gives only a version range has no `version` and a pu
 
 ## Container image SBOMs
 
-A container build usually publishes an SBOM next to its image. OpenArtifact reads it when it is pushed to a hosted docker repository, stores it as an SBOM report of the image and uses its packages for [vulnerability scans](scanning.md#container-images) and license evaluation. The image is identified by its manifest digest (`sha256:<hex>`), which is the `artifact_id` of the report and of the scans.
+A container build usually publishes an SBOM next to its image. OpenArtifact reads it when it is pushed to a hosted docker repository, stores it as an SBOM report of the image and uses its packages for [vulnerability scans](scanning.md#container-images) and license evaluation. The image is identified by its platform manifest digest (`sha256:<hex>`), which is the `artifact_id` of the report and of the scans. If no attachment arrives within five minutes of the push, OpenArtifact generates a CycloneDX report with Trivy from the image itself. The version's **SBOM** tab lists the stored reports for its platform manifests.
 
 An SBOM is recognised in three forms:
 
@@ -100,9 +100,9 @@ An SBOM is recognised in three forms:
 
 A layer may be bare SPDX 2.x JSON, SPDX 3 JSON, SPDX tag-value or CycloneDX JSON, or any of these inside a Sigstore bundle, DSSE envelope or in-toto statement (cosign's SPDX predicate wrapper, `{"Data": ...}`, included). A statement with another predicate type (provenance, vulnerability scan) is ignored. Parsing is bounded: a document or envelope over 32 MiB, or one that names more than 100 000 components, is refused as a whole instead of being read in part, and at most 16 layers of a manifest are read. A document that cannot be read never fails the push; it is logged.
 
-Every ingested document is kept as written (without its envelope). An image holds one report per SBOM format and spec version, so an SPDX 2.3 and a CycloneDX 1.5 document sit side by side, and a newer document of the same format and version replaces the older; the packages of all reports are merged, without duplicates, when a scan or a gate reads them. Signatures and attestations that OpenArtifact indexes itself are not read as SBOMs.
+Every ingested document is kept as written (without its envelope). An image holds one report per SBOM format and spec version, so an SPDX 2.3 and a CycloneDX 1.5 document sit side by side, and a newer document of the same format and version replaces the older; the packages of all reports are merged, without duplicates, when a manual scan or the license gate reads them. Signatures and attestations that OpenArtifact indexes itself are not read as SBOMs.
 
-The components' Package URLs and licenses are what the scans use: see the [table of ecosystems](scanning.md#container-images). Components without a Package URL, and Alpine (`apk`) packages, are listed in the SBOM but not scanned.
+Automatic Trivy scans read the stored document and prefer externally supplied reports. Manual scans that read individual Package URLs use the [ecosystem mappings](scanning.md#container-images).
 
 ## VEX
 

@@ -567,6 +567,7 @@ type SecretScanResultResponse struct {
 
 // SBOMReportResponse represents an SBOM report in API responses.
 type SBOMReportResponse struct {
+	Platform       string `json:"platform,omitempty"`
 	ID             string `json:"id"`
 	RepositoryID   string `json:"repo_id"`
 	ArtifactID     string `json:"artifact_id"`

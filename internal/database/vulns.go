@@ -392,18 +392,25 @@ func vulnScanStatusToJob(status string) string {
 
 // CreateVulnScanResult creates or updates a vulnerability scan result.
 func (p *VulnStore) CreateVulnScanResult(ctx context.Context, result *models.VulnScanResult) error {
+	return createVulnScanResult(ctx, p.db, result)
+}
+
+type vulnResultWriter interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func createVulnScanResult(ctx context.Context, db vulnResultWriter, result *models.VulnScanResult) error {
 	vulnsJSON, err := json.Marshal(result.Vulnerabilities)
 	if err != nil {
 		return fmt.Errorf("failed to marshal vulnerabilities: %w", err)
 	}
 
-	// A nil ScannedAt (a job still scanning) is stored as NULL, not the zero time.
 	scannedAt := sql.NullTime{}
 	if result.ScannedAt != nil {
 		scannedAt = sql.NullTime{Time: *result.ScannedAt, Valid: true}
 	}
 
-	err = p.db.QueryRowContext(ctx, `
+	err = db.QueryRowContext(ctx, `
 		WITH ref AS (
 			INSERT INTO artifact_refs (repository_id, artifact_path, format)
 			VALUES ($1, $2, COALESCE((SELECT format FROM repositories WHERE id = $1), 'unknown'))

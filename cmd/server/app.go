@@ -28,7 +28,6 @@ import (
 	"github.com/openartifact/openartifact/internal/database"
 	"github.com/openartifact/openartifact/internal/dtrack"
 	"github.com/openartifact/openartifact/internal/format/plugin"
-	"github.com/openartifact/openartifact/internal/imagesbom"
 	"github.com/openartifact/openartifact/internal/metrics"
 	"github.com/openartifact/openartifact/internal/middleware"
 	"github.com/openartifact/openartifact/internal/sbom"
@@ -334,7 +333,6 @@ type features struct {
 	dtPublisher *dtrack.UploadPublisher
 	attacher    *api.AttestationAttacher
 	sbomGen     *sbom.Generator
-	imageSBOM   *imagesbom.Ingestor
 	// vexSync imports the vendor CSAF VEX feeds and exchanges VEX decisions
 	// with the federated peers.
 	vexSync *vexsync.Service

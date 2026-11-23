@@ -13,6 +13,7 @@ import (
 	formatdocker "github.com/openartifact/openartifact/internal/format/docker"
 	"github.com/openartifact/openartifact/internal/sbom"
 	"github.com/openartifact/openartifact/internal/vuln"
+	"github.com/openartifact/openartifact/internal/worker"
 )
 
 // The services below are built by the API routes (a web or all process) and by
@@ -99,6 +100,8 @@ func (a *app) buildVulnScanning() *api.VulnHandler {
 		a.extraStops = append(a.extraStops, scanners.Stop)
 
 		handler.ServeScansFrom(requests)
+		imageScans := worker.NewOCIScanWorker(a.db, a.store.blobs, scanners, a.log)
+		a.tasks.Go(func(ctx context.Context) { imageScans.Run(ctx, handler.AnnounceAutomaticImageScan) })
 	} else {
 		handler.ForwardScansTo(a.workers.queue)
 	}

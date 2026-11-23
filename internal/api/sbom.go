@@ -40,17 +40,28 @@ type SBOMStore interface {
 type SBOMHandler struct {
 	repoAccess
 
-	generator *sbom.Generator
-	blobStore storage.BlobStore
-	attest    *attest.Service
-	attacher  *AttestationAttacher
-	db        SBOMStore
+	generator        *sbom.Generator
+	blobStore        storage.BlobStore
+	attest           *attest.Service
+	attacher         *AttestationAttacher
+	db               SBOMStore
+	dockerTagReports func(context.Context, string, string, string) ([]*models.SBOMReport, error)
+	imagePlatform    func(context.Context, string) string
 }
 
 // WithAttacher attaches each generated SBOM to its docker image as an OCI
 // referrer in repositories that enabled it.
 func (h *SBOMHandler) WithAttacher(a *AttestationAttacher) *SBOMHandler {
 	h.attacher = a
+	return h
+}
+
+// WithDockerTagReports enables listing SBOM reports by OCI tag.
+func (h *SBOMHandler) WithDockerTagReports(
+	list func(context.Context, string, string, string) ([]*models.SBOMReport, error),
+	platform func(context.Context, string) string,
+) *SBOMHandler {
+	h.dockerTagReports, h.imagePlatform = list, platform
 	return h
 }
 
@@ -256,7 +267,34 @@ func (h *SBOMHandler) handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeRepoList(w, r, h.repoAccess, repo, "list SBOMs", "reports", h.db.ListSBOMReports, reportToMap)
+	packageName, version := r.URL.Query().Get("package_name"), r.URL.Query().Get("version")
+	if packageName == "" && version == "" {
+		writeRepoList(w, r, h.repoAccess, repo, "list SBOMs", "reports", h.db.ListSBOMReports, reportToMap)
+		return
+	}
+	if packageName == "" || version == "" || repo.Format != "docker" || repo.RepoType != "hosted" || h.dockerTagReports == nil {
+		writeError(
+			w,
+			http.StatusBadRequest,
+			"validation_failed",
+			"package_name and version must select a tag in a hosted Docker repository",
+		)
+		return
+	}
+
+	ctx := r.Context()
+	list := func(ctx context.Context, repoID string) ([]*models.SBOMReport, error) {
+		return h.dockerTagReports(ctx, repoID, packageName, version)
+	}
+	convert := func(report *models.SBOMReport) responses.SBOMReportResponse {
+		item := reportToMap(report)
+		if h.imagePlatform != nil && imageDigestRe.MatchString(report.ArtifactID) {
+			item.Platform = h.imagePlatform(ctx, report.ArtifactID)
+		}
+		return item
+	}
+
+	writeRepoList(w, r, h.repoAccess, repo, "list Docker tag SBOMs", "reports", list, convert)
 }
 
 func (h *SBOMHandler) handleGet(w http.ResponseWriter, r *http.Request) {

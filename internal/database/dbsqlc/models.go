@@ -744,6 +744,13 @@ type OciAttestation struct {
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
 
+type OciScanQueue struct {
+	RepositoryID string     `db:"repository_id" json:"repository_id"`
+	Digest       string     `db:"digest" json:"digest"`
+	AvailableAt  time.Time  `db:"available_at" json:"available_at"`
+	ClaimedUntil *time.Time `db:"claimed_until" json:"claimed_until"`
+}
+
 // Rules exchanging a CI OIDC ID token for a short-lived token of a service account.
 type OidcTrustPolicy struct {
 	ID               string          `db:"id" json:"id"`
@@ -1299,12 +1306,13 @@ type RpmRepo struct {
 
 // SBOM report payloads. FK to scan_jobs. Content in blobs (not inline).
 type SbomResult struct {
-	ID             string  `db:"id" json:"id"`
-	ScanJobID      string  `db:"scan_job_id" json:"scan_job_id"`
-	SbomFormat     string  `db:"sbom_format" json:"sbom_format"`
-	SpecVersion    string  `db:"spec_version" json:"spec_version"`
-	BlobID         *string `db:"blob_id" json:"blob_id"`
-	ComponentCount int32   `db:"component_count" json:"component_count"`
+	ID                 string  `db:"id" json:"id"`
+	ScanJobID          string  `db:"scan_job_id" json:"scan_job_id"`
+	SbomFormat         string  `db:"sbom_format" json:"sbom_format"`
+	SpecVersion        string  `db:"spec_version" json:"spec_version"`
+	BlobID             *string `db:"blob_id" json:"blob_id"`
+	ComponentCount     int32   `db:"component_count" json:"component_count"`
+	GeneratedFromImage bool    `db:"generated_from_image" json:"generated_from_image"`
 }
 
 // Parent table for all scan work (vuln, license, secret, sbom, ai). Result payloads are in: vuln_results, license_results, secret_results, sbom_results, ai_results.

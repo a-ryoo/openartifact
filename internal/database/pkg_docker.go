@@ -505,6 +505,12 @@ func (p *DockerStore) CreateDockerManifest(ctx context.Context, m *models.Docker
 		return err
 	}
 
+	if m.AutoScan {
+		if err := q.EnqueueOCIScan(ctx, dbsqlc.EnqueueOCIScanParams{RepositoryID: m.RepositoryID, Digest: m.Digest}); err != nil {
+			return fmt.Errorf("enqueue OCI scan: %w", err)
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit docker manifest: %w", err)
 	}

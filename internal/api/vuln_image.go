@@ -28,11 +28,6 @@ var imageDigestRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 // errScanSlots is returned when all background-scan slots are taken.
 var errScanSlots = errors.New("too many vulnerability scans in progress")
 
-// defaultImageScanners are the scanners that scan an image started by an SBOM
-// ingest: osv answers the language ecosystems from the local mirror and the
-// operating system packages by name and version.
-func defaultImageScanners() []string { return []string{"osv"} }
-
 // ImageSBOMs reads the SBOMs ingested for container images.
 type ImageSBOMs interface {
 	// HasSBOM reports whether the image has a stored SBOM.
@@ -76,12 +71,14 @@ func (h *VulnHandler) WithAttestations(a AttestationLookup) *VulnHandler {
 	return h
 }
 
-// ScanImage starts the vulnerability scan of an image from its stored SBOM, as
-// a scan started by an SBOM ingest. The scan ends like any other: stored, then
-// announced to the scan hook.
-func (h *VulnHandler) ScanImage(ctx context.Context, repoID, digest string) error {
-	_, err := h.startImageScan(ctx, repoID, digest, defaultImageScanners())
-	return err
+// AnnounceAutomaticImageScan publishes a committed background scan.
+func (h *VulnHandler) AnnounceAutomaticImageScan(ctx context.Context, scan *models.VulnScanResult) {
+	if scan.ScanStatus == vuln.StatusCompleted {
+		h.finishImported(ctx, scan)
+		return
+	}
+
+	h.announceScan(ctx, scan)
 }
 
 // startImageScan stores a "scanning" result for the image and runs the scan.

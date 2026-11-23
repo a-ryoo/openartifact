@@ -29,7 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         :empty-title="t('artifact.sbom.empty')"
         :empty-hint="t('artifact.sbom.emptyHint')"
       >
-        <template #cell-file="{ row }"><span class="block truncate font-mono text-xs" :title="fileName(row.artifact_id)">{{ fileName(row.artifact_id) }}</span></template>
+        <template #cell-file="{ row }"><span class="block truncate font-mono text-xs" :title="fileName(row.artifact_id)">{{ row.platform || fileName(row.artifact_id) }}</span></template>
         <template #cell-format="{ row }"><span class="font-mono text-xs">{{ row.format }}{{ row.spec_version ? ` ${row.spec_version}` : '' }}</span></template>
         <template #cell-components="{ row }"><span class="tabular-nums">{{ row.component_count ?? '—' }}</span></template>
         <template #cell-generated="{ row }"><RelativeTime :value="row.generated_at ?? row.created_at" /></template>
@@ -85,6 +85,12 @@ const columns: ListColumn[] = [
 ]
 
 const error = ref('')
+const dockerTag = computed(() => {
+  const entry = ctx.entry.value
+  return entry && ctx.format.value === 'docker' && ctx.repository.value?.repo_type === 'hosted'
+    ? { package_name: ctx.pkgName.value, version: entry.version }
+    : undefined
+})
 const fileIds = computed(() => ctx.entry.value?.files.map((f) => f.id) ?? [])
 const fileNames = computed(() => new Map((ctx.entry.value?.files ?? []).map((f) => [f.id, f.filename || ctx.pkgName.value])))
 const fileName = (id: string): string => fileNames.value.get(id) ?? id
@@ -94,7 +100,9 @@ const { list, all, refresh: reload } = useLocalList({
   load: async (): Promise<SbomItem[]> => {
     error.value = ''
     try {
-      return reportsOfVersion(await listSboms(ctx.repoName.value), fileIds.value)
+      const tag = dockerTag.value
+      const reports = await listSboms(ctx.repoName.value, tag)
+      return tag ? reports : reportsOfVersion(reports, fileIds.value)
     } catch (err) {
       error.value = err instanceof Error ? err.message : String(err)
       return []
@@ -178,7 +186,7 @@ async function showGraph(id: string): Promise<void> {
   }
 }
 
-watch(() => fileIds.value.join(','), () => void reload())
+watch([() => fileIds.value.join(','), dockerTag], () => void reload())
 
 // The newest CycloneDX report is drawn first: the graph is the reason most people open this tab.
 watch(all, (reports) => {

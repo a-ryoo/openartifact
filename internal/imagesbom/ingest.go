@@ -73,21 +73,12 @@ type Ingestor struct {
 	locker any
 	blobs  storage.BlobStore
 	log    *logger.Logger
-	// onIngested, when set, is told about every image that gained SBOM
-	// content (the vulnerability scan of the image starts from it).
-	onIngested func(ctx context.Context, repoID, digest string)
 }
 
 // NewIngestor builds the ingestor. locker is the database handle that serialises
 // blob writes (the one storage.CommitBlob takes).
 func NewIngestor(db ReportStore, locker any, blobs storage.BlobStore, log *logger.Logger) *Ingestor {
 	return &Ingestor{db: db, locker: locker, blobs: blobs, log: log}
-}
-
-// OnIngested sets the function called after an image gained SBOM content.
-func (i *Ingestor) OnIngested(f func(ctx context.Context, repoID, digest string)) *Ingestor {
-	i.onIngested = f
-	return i
 }
 
 // ArtifactID is the id an image's SBOM reports and scans carry: its manifest
@@ -154,8 +145,6 @@ func (i *Ingestor) Handle(ctx context.Context, p Push) error {
 		layers = layers[:maxManifestLayers]
 	}
 
-	stored := 0
-
 	var errs []error
 
 	for _, l := range layers {
@@ -169,19 +158,13 @@ func (i *Ingestor) Handle(ctx context.Context, p Push) error {
 			continue
 		}
 
-		if err := i.store(ctx, p.RepoID, subject, doc); err != nil {
+		if err := i.store(ctx, p.RepoID, subject, doc, false); err != nil {
 			errs = append(errs, err)
 			continue
 		}
 
-		stored++
-
 		i.log.Infow("container SBOM ingested", "repository", p.RepoName, "image", p.Image, "subject", subject,
 			"origin", origin, "format", doc.Format, "components", len(doc.Components))
-	}
-
-	if stored > 0 && i.onIngested != nil {
-		i.onIngested(ctx, p.RepoID, subject)
 	}
 
 	return errors.Join(errs...)
@@ -232,8 +215,18 @@ func mayBeSBOM(l layerDesc) bool {
 		base == "application/json" || base == "text/plain"
 }
 
+// StoreGenerated stores a generated image SBOM without replacing an attachment.
+func (i *Ingestor) StoreGenerated(ctx context.Context, repoID, subject string, data []byte) error {
+	doc, err := Decode(data)
+	if err != nil {
+		return err
+	}
+
+	return i.store(ctx, repoID, subject, doc, true)
+}
+
 // store writes one decoded SBOM as the report of the image.
-func (i *Ingestor) store(ctx context.Context, repoID, subject string, doc *Document) error {
+func (i *Ingestor) store(ctx context.Context, repoID, subject string, doc *Document, generated bool) error {
 	sum := sha256.Sum256(doc.Body)
 	sha := hex.EncodeToString(sum[:])
 	now := time.Now()
@@ -257,6 +250,7 @@ func (i *Ingestor) store(ctx context.Context, repoID, subject string, doc *Docum
 	})
 
 	err := storage.CommitBlob(ctx, i.locker, i.blobs, blob, func(ctx context.Context, _ string) error {
+		report.GeneratedFromImage = generated
 		return i.db.CreateSBOMReport(ctx, report)
 	})
 	if err != nil {

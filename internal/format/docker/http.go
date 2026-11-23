@@ -570,6 +570,7 @@ func (h *HTTPHandler) handlePutManifest(w http.ResponseWriter, r *http.Request) 
 		SubjectDigest: subjectDigest,
 		Refs:          &refs,
 		RequiredBlobs: pushedBlobs,
+		AutoScan:      meta.runnableImage(contentType),
 		CreatedAt:     importmeta.CreatedAt(r.Context()),
 		UpdatedAt:     time.Now(),
 	}

@@ -71,6 +71,7 @@ Includes all fields of [ExploitAnnotation](#exploitannotation).
 | `cve` | string | no | The CVE id the signals were looked up by: the one in KEV or with the highest EPSS score, else the first CVE id of the finding. Absent when the finding has no CVE id. |
 | `cvss` | number | yes | - |
 | `cwes` | array of string | no | Weakness ids (`CWE-79`) the scanner reported. Absent when it gave none. |
+| `description` | string | no | Full advisory description, when supplied by the scanner. |
 | `epss` | number | yes | EPSS score: the probability of exploitation activity in the next 30 days. Null when no CVE of the finding is scored. Nullable. Minimum: 0. Maximum: 1. |
 | `epss_date` | string (date) | yes | Day of the EPSS score file the score comes from. Null when unscored. Nullable. |
 | `epss_percentile` | number | yes | Share of scored CVEs with the same or a lower EPSS score. Null when unscored. Nullable. Minimum: 0. Maximum: 1. |
@@ -81,6 +82,7 @@ Includes all fields of [ExploitAnnotation](#exploitannotation).
 | `kev_due_date` | string (date) | no | Remediation deadline CISA set. Only for a KEV CVE that has one. |
 | `kev_ransomware` | boolean | no | True when CISA knows the CVE to be used in ransomware campaigns. Absent otherwise. |
 | `package` | string | no | Affected package (`name@version`) in a scan of a container image; absent in the scan of one package. |
+| `primary_url` | string | no | Primary advisory link, when supplied by the scanner. |
 | `priority` | [ExploitPriority](#exploitpriority) | yes | - |
 | `published_at` | string | yes | - |
 | `references` | array of string | no | - |
@@ -1924,6 +1926,7 @@ Catalog figures of a repository. Only present in the repository list (GET /api/v
 | `format` | string | no | - |
 | `generated_at` | string (date-time) | no | - |
 | `id` | string (uuid) | no | - |
+| `platform` | string | no | OCI platform of a manifest report in a tag-scoped listing. |
 | `repo_id` | string (uuid) | no | - |
 | `sbom_data` | any | no | The SBOM document (only on the detail endpoint) |
 | `spec_version` | string | no | - |

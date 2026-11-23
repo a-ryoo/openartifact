@@ -8,6 +8,8 @@ import "time"
 
 // Vulnerability represents a single vulnerability finding.
 type Vulnerability struct {
+	Description string   `json:"description,omitempty"`
+	PrimaryURL  string   `json:"primary_url,omitempty"`
 	ID          string   `json:"id"` // CVE-2021-1234 or GHSA-xxxx
 	Summary     string   `json:"summary"`
 	Severity    string   `json:"severity"` // CRITICAL, HIGH, MEDIUM, LOW, UNKNOWN

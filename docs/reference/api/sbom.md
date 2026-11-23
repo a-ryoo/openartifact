@@ -100,6 +100,8 @@ List SBOM reports for a repository
 | Name | In | Type | Required | Description |
 |---|---|---|---|---|
 | `name` | path | string | yes | - |
+| `package_name` | query | string | no | Use with version to select SBOM reports of a hosted Docker tag. |
+| `version` | query | string | no | The Docker tag when package_name is set. |
 
 **Responses**
 

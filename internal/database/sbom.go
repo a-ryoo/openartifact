@@ -46,15 +46,22 @@ func (p *SBOMStore) CreateSBOMReport(ctx context.Context, report *models.SBOMRep
 				status = EXCLUDED.status, completed_at = EXCLUDED.completed_at, updated_at = now()
 			RETURNING id, created_at, updated_at
 		), ins AS (
-			INSERT INTO sbom_results (scan_job_id, sbom_format, spec_version, blob_id, component_count)
-			SELECT job.id, $3, $5, $7, $6 FROM job
+			INSERT INTO sbom_results (scan_job_id, sbom_format, spec_version, blob_id, component_count, generated_from_image)
+			SELECT job.id, $3, $5, $7, $6, $8 FROM job
 			ON CONFLICT (scan_job_id, sbom_format, spec_version) DO UPDATE SET
-				component_count = EXCLUDED.component_count, blob_id = EXCLUDED.blob_id
+				component_count = EXCLUDED.component_count, blob_id = EXCLUDED.blob_id,
+				generated_from_image = EXCLUDED.generated_from_image
+			WHERE NOT $8::boolean OR sbom_results.blob_id IS NULL
 			RETURNING id, scan_job_id
 		)
 		SELECT ins.id, job.created_at, job.updated_at FROM ins JOIN job ON job.id = ins.scan_job_id`,
-		report.RepositoryID, report.ArtifactID, report.Format, report.GeneratedAt, report.SpecVersion, report.ComponentCount, blobID,
+		report.RepositoryID, report.ArtifactID, report.Format, report.GeneratedAt, report.SpecVersion,
+		report.ComponentCount, blobID, report.GeneratedFromImage,
 	).Scan(&report.ID, &report.CreatedAt, &report.UpdatedAt)
+	if report.GeneratedFromImage && errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create SBOM report: %w", err)
 	}
@@ -64,18 +71,25 @@ func (p *SBOMStore) CreateSBOMReport(ctx context.Context, report *models.SBOMRep
 
 // ListSBOMReports lists all SBOM reports for a repository.
 func (p *SBOMStore) ListSBOMReports(ctx context.Context, repoID string) ([]*models.SBOMReport, error) {
-	return p.querySBOMReports(ctx, "list SBOM reports", repoID, "")
+	return p.querySBOMReports(ctx, "list SBOM reports", repoID, "", "", "")
 }
 
 // GetSBOMReportsByArtifact lists the SBOM reports stored for one artifact of a
-// repository (one per SBOM format and spec version), newest first.
+// repository, with attached reports before generated fallbacks.
 func (p *SBOMStore) GetSBOMReportsByArtifact(ctx context.Context, repoID, artifactID string) ([]*models.SBOMReport, error) {
-	return p.querySBOMReports(ctx, "list SBOM reports of an artifact", repoID, artifactID)
+	return p.querySBOMReports(ctx, "list SBOM reports of an artifact", repoID, artifactID, "", "")
 }
 
-// querySBOMReports lists the reports of a repository, of one artifact when
-// artifactID is not empty, newest first.
-func (p *SBOMStore) querySBOMReports(ctx context.Context, what, repoID, artifactID string) ([]*models.SBOMReport, error) {
+// ListDockerTagSBOMReports includes reports of the live platform manifests.
+func (p *SBOMStore) ListDockerTagSBOMReports(ctx context.Context, repoID, packageName, version string) ([]*models.SBOMReport, error) {
+	return p.querySBOMReports(ctx, "list SBOM reports of a Docker tag", repoID, "", packageName, version)
+}
+
+// querySBOMReports lists the reports of a repository, optionally scoped to an artifact or Docker tag.
+func (p *SBOMStore) querySBOMReports(
+	ctx context.Context,
+	what, repoID, artifactID, packageName, version string,
+) ([]*models.SBOMReport, error) {
 	rows, err := p.db.QueryContext(ctx, `
 		SELECT sr.id, ref.repository_id, ref.artifact_path, sr.sbom_format, sr.spec_version,
 		       sr.component_count, b.sha256, sj.completed_at, sj.created_at, sj.updated_at
@@ -84,7 +98,8 @@ func (p *SBOMStore) querySBOMReports(ctx context.Context, what, repoID, artifact
 		JOIN artifact_refs ref ON ref.id = sj.artifact_ref_id
 		LEFT JOIN blobs b ON b.id = sr.blob_id
 		WHERE sj.scan_type = 'sbom' AND ref.repository_id = $1 AND ($2 = '' OR ref.artifact_path = $2)
-		ORDER BY sj.created_at DESC, sr.id`, repoID, artifactID)
+		AND ($3 = '' OR ref.artifact_path IN (SELECT artifact_id FROM docker_tag_artifacts($1, $3, $4)))
+		ORDER BY CASE WHEN $2 <> '' THEN sr.generated_from_image ELSE false END, sj.created_at DESC, sr.id`, repoID, artifactID, packageName, version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to %s: %w", what, err)
 	}
